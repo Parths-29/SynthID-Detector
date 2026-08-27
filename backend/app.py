@@ -5,8 +5,8 @@ import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-# Add core directory to path so we can import the extractor
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'core')))
+# Add ml directory to path so we can import the extractor
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ml')))
 
 from robust_extractor import RobustSynthIDExtractor
 from synthid_bypass_v4 import SpectralCodebookV4

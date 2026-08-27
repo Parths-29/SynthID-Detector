@@ -1,0 +1,8 @@
+{
+  "name": "synthid-detector-ui",
+  "version": "1.0.0",
+  "description": "Frontend UI for AI Provenance Checker",
+  "scripts": {
+    "dev": "vite"
+  }
+}
