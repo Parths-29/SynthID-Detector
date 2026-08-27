@@ -2,8 +2,15 @@ import sys
 import os
 import cv2
 import numpy as np
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
+from typing import List
+import io
+import uuid
+import exifread
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Add ml directory to path so we can import the extractor
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ml')))
@@ -11,7 +18,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'm
 from robust_extractor import RobustSynthIDExtractor
 from synthid_bypass_v4 import SpectralCodebookV4
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="SynthID Detector API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Enable CORS for the future frontend
 app.add_middleware(
@@ -31,11 +41,20 @@ codebook.load(CODEBOOK_PATH)
 extractor = RobustSynthIDExtractor()
 
 @app.post("/detect")
-async def detect_watermark(image: UploadFile = File(...)):
+@limiter.limit("10/minute")
+async def detect_watermark(request: Request, image: UploadFile = File(...)):
     if not image.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File provided is not an image.")
     
     contents = await image.read()
+    
+    # Extract EXIF data
+    tags = exifread.process_file(io.BytesIO(contents))
+    exif_data = {}
+    for tag in tags.keys():
+        if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote'):
+            exif_data[tag] = str(tags[tag])
+            
     nparr = np.frombuffer(contents, np.uint8)
     img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
@@ -58,10 +77,62 @@ async def detect_watermark(image: UploadFile = File(...)):
             "confidence": result.confidence,
             "phase_match": result.phase_match,
             "multi_scale_consistency": result.multi_scale_consistency,
-            "details": result.details
+            "details": result.details,
+            "exif_data": exif_data
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+batch_jobs = {}
+
+@app.post("/detect-batch")
+@limiter.limit("5/minute")
+async def detect_batch(request: Request, background_tasks: BackgroundTasks, images: List[UploadFile] = File(...)):
+    job_id = str(uuid.uuid4())
+    batch_jobs[job_id] = {"status": "processing", "results": [], "total": len(images)}
+    
+    # Read files into memory to process in background
+    files_data = []
+    for img in images:
+        content = await img.read()
+        files_data.append((img.filename, content))
+        
+    background_tasks.add_task(process_batch, job_id, files_data)
+    return {"job_id": job_id, "status": "processing", "message": "Batch processing started."}
+
+@app.get("/detect-batch/{job_id}")
+async def get_batch_status(job_id: str):
+    if job_id not in batch_jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return batch_jobs[job_id]
+
+def process_batch(job_id: str, files_data: List[tuple]):
+    results = []
+    for filename, contents in files_data:
+        try:
+            tags = exifread.process_file(io.BytesIO(contents))
+            exif_data = {k: str(v) for k, v in tags.items() if k not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote')}
+            
+            nparr = np.frombuffer(contents, np.uint8)
+            img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if img_cv is not None:
+                img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+                res = extractor.detect_from_v4_codebook(img_rgb, codebook, model=None)
+                results.append({
+                    "filename": filename,
+                    "is_watermarked": res.is_watermarked,
+                    "confidence": res.confidence,
+                    "phase_match": res.phase_match,
+                    "exif_data": exif_data
+                })
+            else:
+                results.append({"filename": filename, "error": "Could not decode image"})
+        except Exception as e:
+            results.append({"filename": filename, "error": str(e)})
+            
+    batch_jobs[job_id]["status"] = "completed"
+    batch_jobs[job_id]["results"] = results
 
 if __name__ == "__main__":
     import uvicorn
