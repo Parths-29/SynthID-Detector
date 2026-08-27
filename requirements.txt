@@ -9,3 +9,5 @@ PyWavelets
 Pillow
 exifread
 slowapi
+prometheus-client
+

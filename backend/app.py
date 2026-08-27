@@ -11,6 +11,8 @@ import exifread
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
 
 # Add ml directory to path so we can import the extractor
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ml')))
@@ -32,6 +34,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Prometheus Metrics
+REQUEST_COUNT = Counter('detect_request_count', 'Total detect requests')
+DETECTED_COUNT = Counter('detect_watermark_count', 'Total watermarks detected')
+PROCESSING_TIME = Histogram('detect_processing_seconds', 'Time spent processing images')
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 # Load the codebook once on startup
 CODEBOOK_PATH = os.path.join(os.path.dirname(__file__), '..', 'artifacts', 'spectral_codebook_v4.npz')
 print(f"Loading V4 codebook from {CODEBOOK_PATH}...")
@@ -46,7 +57,9 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
     if not image.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File provided is not an image.")
     
-    contents = await image.read()
+    REQUEST_COUNT.inc()
+    with PROCESSING_TIME.time():
+        contents = await image.read()
     
     # Extract EXIF data
     tags = exifread.process_file(io.BytesIO(contents))
@@ -72,6 +85,9 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
             model=None
         )
         
+        if result.is_watermarked:
+            DETECTED_COUNT.inc()
+            
         return {
             "is_watermarked": result.is_watermarked,
             "confidence": result.confidence,
@@ -96,6 +112,7 @@ async def detect_batch(request: Request, background_tasks: BackgroundTasks, imag
     for img in images:
         content = await img.read()
         files_data.append((img.filename, content))
+        REQUEST_COUNT.inc()
         
     background_tasks.add_task(process_batch, job_id, files_data)
     return {"job_id": job_id, "status": "processing", "message": "Batch processing started."}
@@ -118,7 +135,13 @@ def process_batch(job_id: str, files_data: List[tuple]):
             
             if img_cv is not None:
                 img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-                res = extractor.detect_from_v4_codebook(img_rgb, codebook, model=None)
+                
+                with PROCESSING_TIME.time():
+                    res = extractor.detect_from_v4_codebook(img_rgb, codebook, model=None)
+                
+                if res.is_watermarked:
+                    DETECTED_COUNT.inc()
+                    
                 results.append({
                     "filename": filename,
                     "is_watermarked": res.is_watermarked,

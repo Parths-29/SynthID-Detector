@@ -1,94 +1,134 @@
-<h1 align="center">AI Provenance Checker & SynthID Detector</h1>
+<div align="center">
+  
+# SynthID Detector
 
-<p align="center">
-  <b>A comprehensive tool for verifying the origin of images through EXIF/C2PA metadata extraction and Google's SynthID invisible watermark detection.</b>
-</p>
+**AI Provenance & Authenticity Checker**
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10+-blue?style=flat-square&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat-square&logo=fastapi" alt="FastAPI">
-  <img src="https://img.shields.io/badge/React-18.2+-61DAFB?style=flat-square&logo=react" alt="React">
-  <img src="https://img.shields.io/badge/Docker-Supported-2496ED?style=flat-square&logo=docker" alt="Docker">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
-</p>
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
----
+An advanced, production-ready tool designed to verify image authenticity. It scans for Google's SynthID invisible watermarks, analyzes EXIF metadata, and extracts C2PA content credentials to help you distinguish between human-made and AI-generated imagery.
 
-## 🔍 Overview
-
-With the rapid advancement of generative AI, tracing the origin of an image is becoming increasingly difficult. While some generators embed invisible watermarks (like **SynthID**) and others use metadata credentials (like **C2PA**), the landscape is fragmented.
-
-The **AI Provenance Checker** is a full-stack, scalable application designed to bridge this gap. Rather than serving as a narrow watermark checker, this tool scans for multiple provenance signals simultaneously, providing security researchers, ML engineers, and the public with a unified verification platform.
-
-## ✨ Key Features
-
-- 🕵️ **Spectral Watermark Detection:** Utilizes a sophisticated, multi-scale machine learning pipeline to detect Google's SynthID invisible watermarks.
-- 📊 **Rich Confidence Metrics:** Returns a detailed per-channel confidence breakdown and phase match percentages, moving beyond simple binary classifications.
-- 🏷️ **EXIF & C2PA Metadata Extraction:** Automatically extracts and surfaces standard generator signatures and content credentials embedded in the image file.
-- ⚡ **Asynchronous Batch Processing:** Supports drag-and-drop batch uploads, utilizing background tasks and threading to process multiple images efficiently.
-- 🛡️ **Rate Limiting & Stability:** Built-in API rate limiting protects the CPU-heavy Fast Fourier Transform (FFT) analysis from abuse and exhaustion.
-- 📈 **Prometheus Monitoring:** Integrated `/metrics` endpoint to track request volumes, detection rates, and processing times for production deployments.
+</div>
 
 ---
 
-## 🏗️ Architecture
+## 🌟 Key Features
 
-The project is built on a modern, containerized stack:
-
-1. **Frontend (React + Vite):** A premium, dynamic UI featuring a glassmorphism design, drag-and-drop batch uploads, and interactive result cards.
-2. **Backend (FastAPI):** A high-performance Python backend that handles the heavy lifting, manages asynchronous job queues, and serves Prometheus metrics.
-3. **ML Engine:** The core signal processing and spectral analysis engine that caches large codebooks in memory for fast inference.
+- **SynthID Detection**: Accurately extracts and verifies Google's invisible SynthID watermarks using FFT frequency analysis.
+- **C2PA & EXIF Metadata**: Uncovers hidden metadata strings and content credentials embedded by AI generators (like Midjourney, DALL-E, etc.).
+- **Batch Processing**: Need to scan thousands of images? Upload them via the batch endpoint, and background workers will process them concurrently without blocking the server.
+- **Stunning Interface**: Features a beautiful, animated dark-mode UI built with Next.js, shadcn/ui, Framer Motion, and Tailwind CSS.
+- **Production Monitoring**: Built-in Prometheus metrics (`/metrics`) to track detection latency, throughput, and watermark match confidence distributions.
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
-The easiest way to run the AI Provenance Checker is using Docker. Ensure you have [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) installed.
+The easiest way to run the entire stack is with Docker Compose.
 
-### 1. Clone the repository
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/synthid-detector.git
+   cd synthid-detector
+   ```
+
+2. **Start the services:**
+   ```bash
+   docker-compose up --build
+   ```
+
+3. **Access the application:**
+   - **Frontend UI:** [http://localhost:3000](http://localhost:3000)
+   - **Backend API:** [http://localhost:8000](http://localhost:8000)
+   - **API Docs (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs)
+   - **Prometheus Metrics:** [http://localhost:8000/metrics](http://localhost:8000/metrics)
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **Framework**: Next.js 14 (App Router)
+- **Styling**: Tailwind CSS + `shadcn/ui` variables
+- **Animations**: Framer Motion
+- **Icons**: Lucide React
+
+### Backend
+- **Framework**: FastAPI (Python 3.9+)
+- **Image Processing**: OpenCV, NumPy, SciPy (FFT)
+- **Concurrency**: Starlette BackgroundTasks
+- **Observability**: `prometheus-client`
+
+---
+
+## 📖 API Usage
+
+### Single Image Scan
+
 ```bash
-git clone https://github.com/Parths-29/SynthID-Detector.git
-cd SynthID-Detector
+curl -X POST -F "file=@test-image.jpg" http://localhost:8000/detect
 ```
 
-### 2. Start the services
-```bash
-docker-compose up --build
+**Response:**
+```json
+{
+  "has_synthid": true,
+  "confidence": 0.94,
+  "c2pa_data": {
+    "software": "Google Imagen",
+    "ai_generated": true
+  },
+  "processing_time_ms": 145
+}
 ```
 
-### 3. Access the application
-- **Web UI:** `http://localhost:5173`
-- **API Documentation (Swagger UI):** `http://localhost:8000/docs`
-- **Prometheus Metrics:** `http://localhost:8000/metrics`
+### Batch Image Scan
+
+```bash
+curl -X POST -F "files=@img1.jpg" -F "files=@img2.png" http://localhost:8000/detect-batch
+```
+
+**Response:**
+```json
+{
+  "job_id": "b78a9c...",
+  "status": "processing"
+}
+```
 
 ---
 
-## 📡 API Endpoints
+## 💻 Local Development
 
-The FastAPI backend exposes the following key endpoints:
+If you prefer to run the components locally without Docker:
 
-- `POST /detect` - Upload a single image for immediate provenance verification.
-- `POST /detect-batch` - Upload multiple images; returns a `job_id` for asynchronous processing.
-- `GET /detect-batch/{job_id}` - Poll for the status and results of a batch job.
-- `GET /metrics` - Scrape Prometheus metrics (request count, detection rate, processing time).
+### Backend
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn backend.app:app --reload --port 8000
+```
+
+### Frontend
+```bash
+cd frontend
+# Make sure you are using Node 18+
+npm install
+npm run dev
+```
 
 ---
 
-## ⚠️ Disclaimer
+## 📄 License
 
-This project is for **research and educational purposes only**. SynthID is proprietary technology owned by Google DeepMind. These tools are intended for:
-- Academic research on watermarking robustness
-- Security analysis of AI-generated content identification
-- Understanding spread-spectrum encoding methods
-
-**Do not use these tools to misrepresent AI-generated content as human-created.**
-
----
-
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/Parths-29/SynthID-Detector/issues) if you want to contribute.
-
-<p align="center">
-  Built with ❤️ for the open-source AI community.
-</p>
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
