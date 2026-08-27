@@ -11,7 +11,7 @@ import {
   LoaderIcon,
   Sparkles,
   Command,
-  Shield,
+  ArrowLeft,
   FolderSearch,
   BarChart3,
   CheckCircle,
@@ -358,7 +358,13 @@ export function AnimatedAIChat() {
         <div className="absolute top-1/4 right-1/3 w-64 h-64 bg-fuchsia-500/10 rounded-full mix-blend-normal filter blur-[96px] animate-pulse delay-1000" />
       </div>
 
-      <div className="w-full max-w-2xl mx-auto relative">
+      {/* Back to Home Button */}
+      <Link href="/" className="absolute top-6 left-6 md:top-8 md:left-8 z-50 inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm">
+        <ArrowLeft className="w-4 h-4" />
+        <span>Back to Home</span>
+      </Link>
+
+      <div className="w-full max-w-2xl mx-auto relative mt-12 md:mt-0">
         <motion.div
           className="relative z-10 space-y-12"
           initial={{ opacity: 0, y: 20 }}
@@ -366,18 +372,14 @@ export function AnimatedAIChat() {
           transition={{ duration: 0.6, ease: "easeOut" }}
         >
           {/* Header */}
-          <div className="text-center space-y-3">
-            <Link href="/" className="inline-flex items-center gap-2 text-white/40 hover:text-white/70 transition-colors text-sm mb-4">
-              <Shield className="w-4 h-4" />
-              <span>← Back to Home</span>
-            </Link>
+          <div className="text-center space-y-4">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2, duration: 0.5 }}
               className="inline-block"
             >
-              <h1 className="text-3xl font-medium tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white/90 to-white/40 pb-1">
+              <h1 className="text-4xl md:text-5xl font-semibold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60 pb-2">
                 Upload an image to verify
               </h1>
               <motion.div
@@ -713,7 +715,7 @@ export function AnimatedAIChat() {
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-7 rounded-full bg-violet-500/20 flex items-center justify-center text-center">
-                <Shield className="w-4 h-4 text-violet-400" />
+                <Sparkles className="w-4 h-4 text-violet-400" />
               </div>
               <div className="flex items-center gap-2 text-sm text-white/70">
                 <span>Analyzing</span>

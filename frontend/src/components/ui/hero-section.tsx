@@ -3,7 +3,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, ChevronRight, Menu, X, Shield, Zap, BarChart3 } from "lucide-react";
+import { ArrowRight, ChevronRight, Menu, X, Shield, Zap, BarChart3, Sparkles, Terminal, Code2, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatedGroup } from "@/components/ui/animated-group";
 import { cn } from "@/lib/utils";
@@ -106,8 +106,9 @@ export function HeroSection() {
                     </div>
                   </Link>
 
-                  <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem]">
-                    Detect AI Watermarks in Seconds
+                  <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] flex items-center justify-center">
+                    <Sparkles className="w-12 h-12 md:w-16 md:h-16 text-violet-500 mr-4 shrink-0" />
+                    <span>Detect AI Watermarks in Seconds</span>
                   </h1>
                   <p className="mx-auto mt-8 max-w-2xl text-balance text-lg">
                     Verify image authenticity by scanning for Google&apos;s SynthID
@@ -358,6 +359,98 @@ export function HeroSection() {
                 <span className="text-xs text-muted-foreground">
                   Prometheus
                 </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* How It Works Section */}
+        <section className="py-24 relative overflow-hidden bg-black">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-500/[0.03] to-transparent pointer-events-none" />
+          <div className="mx-auto max-w-7xl px-6 relative z-10">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white mb-4">How It Works</h2>
+              <p className="text-white/40 max-w-2xl mx-auto">Our advanced spectral analysis pipeline detects invisible signatures left by generative AI models like Google's Imagen.</p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-8 hover:bg-white/[0.04] transition-colors relative group">
+                <div className="w-12 h-12 bg-violet-500/10 rounded-xl flex items-center justify-center mb-6 border border-violet-500/20 group-hover:scale-110 transition-transform">
+                  <Database className="w-6 h-6 text-violet-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white/90 mb-3">1. Fast Fourier Transform (FFT)</h3>
+                <p className="text-white/40 text-sm leading-relaxed">
+                  The image is converted from the spatial domain to the frequency domain using 2D FFT, isolating high-frequency spectral components where watermarks are typically embedded.
+                </p>
+              </div>
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-8 hover:bg-white/[0.04] transition-colors relative group">
+                <div className="w-12 h-12 bg-fuchsia-500/10 rounded-xl flex items-center justify-center mb-6 border border-fuchsia-500/20 group-hover:scale-110 transition-transform">
+                  <Zap className="w-6 h-6 text-fuchsia-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white/90 mb-3">2. Concentric Ring Analysis</h3>
+                <p className="text-white/40 text-sm leading-relaxed">
+                  We calculate the magnitude spectrum and aggregate energies along concentric rings. A prominent spike in a specific frequency ring indicates the presence of a SynthID torus pattern.
+                </p>
+              </div>
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-8 hover:bg-white/[0.04] transition-colors relative group">
+                <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center mb-6 border border-emerald-500/20 group-hover:scale-110 transition-transform">
+                  <Code2 className="w-6 h-6 text-emerald-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white/90 mb-3">3. Metadata & C2PA Extraction</h3>
+                <p className="text-white/40 text-sm leading-relaxed">
+                  Simultaneously, the detector parses EXIF tags and Content Credentials (C2PA) to find digital signatures from tools like Midjourney, DALL-E, or Photoshop.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* API Docs Section */}
+        <section className="py-24 relative overflow-hidden bg-zinc-950 border-t border-white/[0.05]">
+          <div className="mx-auto max-w-7xl px-6 relative z-10 flex flex-col md:flex-row items-center gap-12">
+            <div className="flex-1 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium">
+                <Terminal className="w-3 h-3" />
+                Developer API
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold tracking-tight text-white">Integrate directly into your pipeline</h2>
+              <p className="text-white/40 text-lg">
+                Automate your content moderation with our lightning-fast FastAPI backend. Upload single files or batch process thousands of images asynchronously.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Link href="/chat" className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors">
+                  Try the Demo
+                </Link>
+                <Link href="http://localhost:8000/docs" target="_blank" className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-white/5 text-white border border-white/10 hover:bg-white/10 transition-colors">
+                  View Swagger Docs
+                </Link>
+              </div>
+            </div>
+            <div className="flex-1 w-full max-w-xl">
+              <div className="bg-black border border-white/[0.05] rounded-2xl p-4 shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 left-0 right-0 h-10 border-b border-white/[0.05] flex items-center px-4 gap-2 bg-white/[0.01]">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-amber-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
+                </div>
+                <div className="pt-10">
+                  <pre className="text-xs sm:text-sm text-white/70 overflow-x-auto p-4 rounded-xl bg-white/[0.02]">
+                    <code className="language-bash">
+<span className="text-pink-400">curl</span> -X POST \<br/>
+  -F <span className="text-emerald-400">"file=@test-image.jpg"</span> \<br/>
+  http://localhost:8000/detect<br/><br/>
+<span className="text-white/30"># Response:</span><br/>
+&#123;<br/>
+  <span className="text-blue-400">"has_synthid"</span>: <span className="text-amber-400">true</span>,<br/>
+  <span className="text-blue-400">"confidence"</span>: <span className="text-fuchsia-400">0.94</span>,<br/>
+  <span className="text-blue-400">"c2pa_data"</span>: &#123;<br/>
+    <span className="text-blue-400">"software"</span>: <span className="text-emerald-400">"Google Imagen"</span>,<br/>
+    <span className="text-blue-400">"ai_generated"</span>: <span className="text-amber-400">true</span><br/>
+  &#125;,<br/>
+  <span className="text-blue-400">"processing_time_ms"</span>: <span className="text-fuchsia-400">145</span><br/>
+&#125;
+                    </code>
+                  </pre>
+                </div>
               </div>
             </div>
           </div>
