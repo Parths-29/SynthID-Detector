@@ -1,10 +1,22 @@
+"""
+SynthID Detector — FastAPI Backend
+
+Provides endpoints for:
+- Single image watermark detection (/detect)
+- Batch image processing (/detect-batch, /detect-batch/{job_id})
+- Health check (/health)
+- Prometheus metrics (/metrics)
+"""
+
 import sys
 import os
 import cv2
 import numpy as np
+import time
+import threading
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List
+from typing import List, Optional
 import io
 import uuid
 import exifread
@@ -20,30 +32,72 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'm
 from robust_extractor import RobustSynthIDExtractor
 from synthid_bypass_v4 import SpectralCodebookV4
 
+# ---------------------------------------------------------------------------
+# MongoDB placeholder — uncomment and configure when ready
+# ---------------------------------------------------------------------------
+# from motor.motor_asyncio import AsyncIOMotorClient
+#
+# MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+# MONGO_DB  = os.getenv("MONGO_DB", "synthid_detector")
+#
+# mongo_client: Optional[AsyncIOMotorClient] = None
+# db = None
+#
+# @app.on_event("startup")
+# async def startup_db():
+#     global mongo_client, db
+#     mongo_client = AsyncIOMotorClient(MONGO_URI)
+#     db = mongo_client[MONGO_DB]
+#
+# @app.on_event("shutdown")
+# async def shutdown_db():
+#     if mongo_client:
+#         mongo_client.close()
+# ---------------------------------------------------------------------------
+
+# ── App & middleware ────────────────────────────────────────────────────────
+
 limiter = Limiter(key_func=get_remote_address)
-app = FastAPI(title="SynthID Detector API")
+app = FastAPI(
+    title="SynthID Detector API",
+    description="Detect invisible AI watermarks in images using spectral analysis",
+    version="2.0.0",
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Enable CORS for the future frontend
+# CORS — configurable via environment variable
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Prometheus Metrics
+# ── Prometheus metrics ──────────────────────────────────────────────────────
+
 REQUEST_COUNT = Counter('detect_request_count', 'Total detect requests')
 DETECTED_COUNT = Counter('detect_watermark_count', 'Total watermarks detected')
 PROCESSING_TIME = Histogram('detect_processing_seconds', 'Time spent processing images')
+
 
 @app.get("/metrics")
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-# Load the codebook once on startup
+
+# ── Health endpoint ─────────────────────────────────────────────────────────
+
+@app.get("/health")
+def health():
+    """Health check for Docker / Kubernetes readiness probes."""
+    return {"status": "ok", "version": "2.0.0"}
+
+
+# ── Load ML models on startup ──────────────────────────────────────────────
+
 CODEBOOK_PATH = os.path.join(os.path.dirname(__file__), '..', 'artifacts', 'spectral_codebook_v4.npz')
 print(f"Loading V4 codebook from {CODEBOOK_PATH}...")
 codebook = SpectralCodebookV4()
@@ -51,111 +105,232 @@ codebook.load(CODEBOOK_PATH)
 
 extractor = RobustSynthIDExtractor()
 
+
+# ── Batch job store with TTL ────────────────────────────────────────────────
+
+BATCH_JOB_TTL_SECONDS = int(os.getenv("BATCH_JOB_TTL", "3600"))  # 1 hour default
+
+batch_jobs: dict = {}
+_batch_lock = threading.Lock()
+
+
+def _cleanup_expired_jobs():
+    """Remove batch jobs older than TTL."""
+    now = time.time()
+    with _batch_lock:
+        expired = [jid for jid, job in batch_jobs.items()
+                   if now - job.get("created_at", now) > BATCH_JOB_TTL_SECONDS]
+        for jid in expired:
+            del batch_jobs[jid]
+
+
+# ── Helper: extract EXIF data ──────────────────────────────────────────────
+
+def _extract_exif(contents: bytes) -> dict:
+    """Extract EXIF metadata from raw image bytes."""
+    tags = exifread.process_file(io.BytesIO(contents))
+    return {
+        k: str(v)
+        for k, v in tags.items()
+        if k not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote')
+    }
+
+
+# ── Single image detection ─────────────────────────────────────────────────
+
 @app.post("/detect")
 @limiter.limit("10/minute")
 async def detect_watermark(request: Request, image: UploadFile = File(...)):
-    if not image.content_type.startswith("image/"):
+    """
+    Analyze a single image for SynthID watermarks.
+
+    Returns detection result with confidence score, phase match,
+    multi-scale consistency, frequency spectrum data, and EXIF metadata.
+    """
+    if not image.content_type or not image.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File provided is not an image.")
-    
+
     REQUEST_COUNT.inc()
-    with PROCESSING_TIME.time():
-        contents = await image.read()
-    
+    start_time = time.time()
+
+    contents = await image.read()
+
     # Extract EXIF data
-    tags = exifread.process_file(io.BytesIO(contents))
-    exif_data = {}
-    for tag in tags.keys():
-        if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote'):
-            exif_data[tag] = str(tags[tag])
-            
+    exif_data = _extract_exif(contents)
+
     nparr = np.frombuffer(contents, np.uint8)
     img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
+
     if img_cv is None:
         raise HTTPException(status_code=400, detail="Could not decode image.")
-        
+
     # Convert BGR to RGB
     img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-    
+
     try:
-        # We specify the model as none, it will attempt to match resolution profiles
-        result = extractor.detect_from_v4_codebook(
-            img_rgb, 
-            codebook,
-            model=None
-        )
-        
+        with PROCESSING_TIME.time():
+            result = extractor.detect_from_v4_codebook(
+                img_rgb,
+                codebook,
+                model=None
+            )
+
         if result.is_watermarked:
             DETECTED_COUNT.inc()
-            
-        return {
+
+        processing_time_ms = round((time.time() - start_time) * 1000, 2)
+
+        # Build frequency spectrum data for frontend visualization
+        spectrum_data = _compute_spectrum_data(img_rgb)
+
+        response = {
             "is_watermarked": result.is_watermarked,
             "confidence": result.confidence,
             "phase_match": result.phase_match,
             "multi_scale_consistency": result.multi_scale_consistency,
             "details": result.details,
-            "exif_data": exif_data
+            "exif_data": exif_data,
+            "processing_time_ms": processing_time_ms,
+            "spectrum_data": spectrum_data,
         }
+
+        # ── MongoDB placeholder: persist result ──
+        # if db is not None:
+        #     await db.scan_results.insert_one({
+        #         **response,
+        #         "filename": image.filename,
+        #         "created_at": datetime.utcnow(),
+        #     })
+
+        return response
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-batch_jobs = {}
+
+# ── Batch image detection ──────────────────────────────────────────────────
 
 @app.post("/detect-batch")
 @limiter.limit("5/minute")
-async def detect_batch(request: Request, background_tasks: BackgroundTasks, images: List[UploadFile] = File(...)):
+async def detect_batch(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    images: List[UploadFile] = File(...)
+):
+    """Submit multiple images for background batch processing."""
+    _cleanup_expired_jobs()  # housekeeping
+
     job_id = str(uuid.uuid4())
-    batch_jobs[job_id] = {"status": "processing", "results": [], "total": len(images)}
-    
+
     # Read files into memory to process in background
     files_data = []
     for img in images:
         content = await img.read()
         files_data.append((img.filename, content))
         REQUEST_COUNT.inc()
-        
+
+    with _batch_lock:
+        batch_jobs[job_id] = {
+            "status": "processing",
+            "results": [],
+            "total": len(images),
+            "created_at": time.time(),
+        }
+
     background_tasks.add_task(process_batch, job_id, files_data)
     return {"job_id": job_id, "status": "processing", "message": "Batch processing started."}
 
+
 @app.get("/detect-batch/{job_id}")
 async def get_batch_status(job_id: str):
+    """Poll batch job status and retrieve results when complete."""
     if job_id not in batch_jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=404, detail="Job not found or expired.")
     return batch_jobs[job_id]
 
+
 def process_batch(job_id: str, files_data: List[tuple]):
+    """Background worker that processes a batch of images."""
     results = []
     for filename, contents in files_data:
         try:
-            tags = exifread.process_file(io.BytesIO(contents))
-            exif_data = {k: str(v) for k, v in tags.items() if k not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote')}
-            
+            exif_data = _extract_exif(contents)
             nparr = np.frombuffer(contents, np.uint8)
             img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
+
             if img_cv is not None:
                 img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-                
+
                 with PROCESSING_TIME.time():
                     res = extractor.detect_from_v4_codebook(img_rgb, codebook, model=None)
-                
+
                 if res.is_watermarked:
                     DETECTED_COUNT.inc()
-                    
+
                 results.append({
                     "filename": filename,
                     "is_watermarked": res.is_watermarked,
                     "confidence": res.confidence,
                     "phase_match": res.phase_match,
-                    "exif_data": exif_data
+                    "exif_data": exif_data,
                 })
             else:
                 results.append({"filename": filename, "error": "Could not decode image"})
         except Exception as e:
             results.append({"filename": filename, "error": str(e)})
-            
-    batch_jobs[job_id]["status"] = "completed"
-    batch_jobs[job_id]["results"] = results
+
+    with _batch_lock:
+        batch_jobs[job_id]["status"] = "completed"
+        batch_jobs[job_id]["results"] = results
+
+
+# ── Spectrum data helper ───────────────────────────────────────────────────
+
+def _compute_spectrum_data(img_rgb: np.ndarray, num_rings: int = 32) -> dict:
+    """
+    Compute radial frequency spectrum for frontend visualization.
+    Returns ring energies and the peak ring index.
+    """
+    try:
+        gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY).astype(np.float64)
+        h, w = gray.shape
+        f_transform = np.fft.fft2(gray)
+        f_shift = np.fft.fftshift(f_transform)
+        magnitude = np.log1p(np.abs(f_shift))
+
+        cy, cx = h // 2, w // 2
+        max_radius = min(cy, cx)
+        ring_width = max(1, max_radius // num_rings)
+
+        ring_energies = []
+        for i in range(num_rings):
+            r_inner = i * ring_width
+            r_outer = (i + 1) * ring_width
+            y, x = np.ogrid[:h, :w]
+            dist = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
+            mask = (dist >= r_inner) & (dist < r_outer)
+            if mask.any():
+                ring_energies.append(float(np.mean(magnitude[mask])))
+            else:
+                ring_energies.append(0.0)
+
+        # Normalize to 0-1
+        max_e = max(ring_energies) if ring_energies else 1.0
+        if max_e > 0:
+            ring_energies = [e / max_e for e in ring_energies]
+
+        peak_ring = int(np.argmax(ring_energies[1:])) + 1  # skip DC component
+
+        return {
+            "ring_energies": ring_energies,
+            "peak_ring": peak_ring,
+            "num_rings": num_rings,
+        }
+    except Exception:
+        return {"ring_energies": [], "peak_ring": 0, "num_rings": num_rings}
+
+
+# ── Main ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn

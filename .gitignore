@@ -1,6 +1,47 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.egg-info/
+dist/
+build/
 venv/
 env/
+.venv/
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Node / Frontend
+node_modules/
+.next/
+out/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# ML Artifacts (large binary files)
+artifacts/*.npz
+artifacts/*.pkl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Docker
+*.pid
+
+# Test
+.pytest_cache/
+htmlcov/
+.coverage
