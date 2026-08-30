@@ -455,6 +455,27 @@ export function HeroSection() {
             </div>
           </div>
         </section>
+
+        {/* Footer */}
+        <footer className="border-t border-white/[0.05] bg-black py-12">
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-violet-400" />
+                <span className="font-semibold text-white/80">SynthID Detector</span>
+              </div>
+              <div className="flex items-center gap-6 text-sm text-white/40">
+                <Link href="/chat" className="hover:text-white/70 transition-colors">Try Demo</Link>
+                <Link href="/history" className="hover:text-white/70 transition-colors">History</Link>
+                <Link href="https://github.com/Parths-29/SynthID-Detector" target="_blank" className="hover:text-white/70 transition-colors">GitHub</Link>
+                <Link href="http://localhost:8000/docs" target="_blank" className="hover:text-white/70 transition-colors">API Docs</Link>
+              </div>
+              <div className="text-xs text-white/20">
+                &copy; {new Date().getFullYear()} Parth Sharma. MIT License.
+              </div>
+            </div>
+          </div>
+        </footer>
       </main>
     </>
   );
@@ -462,6 +483,7 @@ export function HeroSection() {
 
 const menuItems = [
   { name: "How It Works", href: "#how-it-works" },
+  { name: "History", href: "/history" },
   { name: "API Docs", href: "/chat" },
   { name: "GitHub", href: "https://github.com/Parths-29/SynthID-Detector" },
 ];

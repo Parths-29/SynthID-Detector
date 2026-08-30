@@ -16,11 +16,15 @@ import {
   BarChart3,
   CheckCircle,
   AlertTriangle,
+  Clock,
+  Upload,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
 import axios from "axios";
 import Link from "next/link";
+
+// ── Hooks ──────────────────────────────────────────────────────────────────
 
 interface UseAutoResizeTextareaProps {
   minHeight: number;
@@ -70,12 +74,7 @@ function useAutoResizeTextarea({
   return { textareaRef, adjustHeight };
 }
 
-interface CommandSuggestion {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  prefix: string;
-}
+// ── Textarea Component ────────────────────────────────────────────────────
 
 interface TextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -121,17 +120,56 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 Textarea.displayName = "Textarea";
 
-// Detection Result type
+// ── Types ─────────────────────────────────────────────────────────────────
+
 interface DetectionResult {
   filename: string;
   is_watermarked?: boolean;
   confidence?: number;
   phase_match?: number;
   multi_scale_consistency?: number;
+  processing_time_ms?: number;
   exif_data?: Record<string, string>;
   details?: Record<string, unknown>;
+  spectrum_data?: {
+    ring_energies: number[];
+    peak_ring: number;
+    num_rings: number;
+  };
   error?: string;
 }
+
+interface CommandSuggestion {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  prefix: string;
+}
+
+// ── History helpers ───────────────────────────────────────────────────────
+
+function saveToHistory(result: DetectionResult) {
+  try {
+    const stored = localStorage.getItem("synthid_scan_history");
+    const history = stored ? JSON.parse(stored) : [];
+    history.push({
+      id: crypto.randomUUID(),
+      filename: result.filename,
+      is_watermarked: result.is_watermarked || false,
+      confidence: result.confidence || 0,
+      phase_match: result.phase_match || 0,
+      processing_time_ms: result.processing_time_ms || 0,
+      exif_data: result.exif_data || {},
+      timestamp: new Date().toISOString(),
+      error: result.error,
+    });
+    localStorage.setItem("synthid_scan_history", JSON.stringify(history));
+  } catch {
+    // localStorage quota exceeded or unavailable
+  }
+}
+
+// ── Command suggestions ───────────────────────────────────────────────────
 
 const commandSuggestions: CommandSuggestion[] = [
   {
@@ -148,9 +186,9 @@ const commandSuggestions: CommandSuggestion[] = [
   },
   {
     icon: <BarChart3 className="w-4 h-4" />,
-    label: "View Results",
-    description: "Show recent detection results",
-    prefix: "/results",
+    label: "View History",
+    description: "See past detection results",
+    prefix: "/history",
   },
   {
     icon: <Sparkles className="w-4 h-4" />,
@@ -160,14 +198,18 @@ const commandSuggestions: CommandSuggestion[] = [
   },
 ];
 
+// ── Main Component ────────────────────────────────────────────────────────
+
 export function AnimatedAIChat() {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState<number>(-1);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [results, setResults] = useState<DetectionResult[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
     minHeight: 60,
     maxHeight: 200,
@@ -176,8 +218,17 @@ export function AnimatedAIChat() {
   const commandPaletteRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+  // Generate image previews
+  useEffect(() => {
+    const urls = attachments.map((file) => URL.createObjectURL(file));
+    setPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [attachments]);
+
+  // Command palette logic
   useEffect(() => {
     if (value.startsWith("/") && !value.includes(" ")) {
       setShowCommandPalette(true);
@@ -194,6 +245,7 @@ export function AnimatedAIChat() {
     }
   }, [value]);
 
+  // Mouse tracking
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       setMousePosition({ x: e.clientX, y: e.clientY });
@@ -202,6 +254,7 @@ export function AnimatedAIChat() {
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
+  // Click outside command palette
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
@@ -217,6 +270,35 @@ export function AnimatedAIChat() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // ── Drag and Drop ────────────────────────────────────────────────────
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      f.type.startsWith("image/")
+    );
+    if (files.length > 0) {
+      setAttachments((prev) => [...prev, ...files]);
+    }
+  };
+
+  // ── Keyboard ─────────────────────────────────────────────────────────
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (showCommandPalette) {
@@ -234,12 +316,7 @@ export function AnimatedAIChat() {
         e.preventDefault();
         if (activeSuggestion >= 0) {
           const selectedCommand = commandSuggestions[activeSuggestion];
-          setValue(selectedCommand.prefix + " ");
-          setShowCommandPalette(false);
-
-          if (selectedCommand.prefix === "/scan" || selectedCommand.prefix === "/batch") {
-            fileInputRef.current?.click();
-          }
+          handleCommandSelect(selectedCommand);
         }
       } else if (e.key === "Escape") {
         e.preventDefault();
@@ -253,6 +330,22 @@ export function AnimatedAIChat() {
     }
   };
 
+  const handleCommandSelect = (command: CommandSuggestion) => {
+    if (command.prefix === "/history") {
+      window.location.href = "/history";
+      return;
+    }
+
+    setValue(command.prefix + " ");
+    setShowCommandPalette(false);
+
+    if (command.prefix === "/scan" || command.prefix === "/batch") {
+      setTimeout(() => fileInputRef.current?.click(), 100);
+    }
+  };
+
+  // ── Send message / detect ────────────────────────────────────────────
+
   const handleSendMessage = async () => {
     if (attachments.length === 0) return;
 
@@ -261,35 +354,55 @@ export function AnimatedAIChat() {
 
     if (attachments.length === 1) {
       const formData = new FormData();
-      formData.append("file", attachments[0]);
+      formData.append("image", attachments[0]);
       try {
         const res = await axios.post(`${API_BASE_URL}/detect`, formData);
-        setResults([{ filename: attachments[0].name, ...res.data }]);
+        const result: DetectionResult = {
+          filename: attachments[0].name,
+          ...res.data,
+        };
+        setResults([result]);
+        saveToHistory(result);
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { detail?: string } }, message?: string };
-        setResults([
-          {
-            filename: attachments[0].name,
-            error: error?.response?.data?.detail || error.message || "An error occurred",
-          },
-        ]);
+        const error = err as {
+          response?: { data?: { detail?: string } };
+          message?: string;
+        };
+        const result: DetectionResult = {
+          filename: attachments[0].name,
+          error:
+            error?.response?.data?.detail ||
+            error.message ||
+            "An error occurred",
+        };
+        setResults([result]);
+        saveToHistory(result);
       }
     } else {
       const formData = new FormData();
-      attachments.forEach((file) => formData.append("files", file));
+      attachments.forEach((file) => formData.append("images", file));
       try {
-        const res = await axios.post(`${API_BASE_URL}/detect-batch`, formData);
+        const res = await axios.post(
+          `${API_BASE_URL}/detect-batch`,
+          formData
+        );
         const jobId = res.data.job_id;
         pollBatchStatus(jobId);
         return; // don't setIsTyping(false) yet
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { detail?: string } }, message?: string };
-        setResults([
-          {
-            filename: "batch",
-            error: error?.response?.data?.detail || error.message || "An error occurred",
-          },
-        ]);
+        const error = err as {
+          response?: { data?: { detail?: string } };
+          message?: string;
+        };
+        const result: DetectionResult = {
+          filename: "batch",
+          error:
+            error?.response?.data?.detail ||
+            error.message ||
+            "An error occurred",
+        };
+        setResults([result]);
+        saveToHistory(result);
       }
     }
 
@@ -303,7 +416,9 @@ export function AnimatedAIChat() {
     try {
       const res = await axios.get(`${API_BASE_URL}/detect-batch/${jobId}`);
       if (res.data.status === "completed") {
-        setResults(res.data.results);
+        const batchResults: DetectionResult[] = res.data.results;
+        setResults(batchResults);
+        batchResults.forEach(saveToHistory);
         setIsTyping(false);
         setAttachments([]);
         setValue("");
@@ -316,6 +431,8 @@ export function AnimatedAIChat() {
     }
   };
 
+  // ── File handling ────────────────────────────────────────────────────
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files).filter((f) =>
@@ -323,6 +440,8 @@ export function AnimatedAIChat() {
       );
       setAttachments((prev) => [...prev, ...newFiles]);
     }
+    // Reset input so same file can be selected again
+    e.target.value = "";
   };
 
   const removeAttachment = (index: number) => {
@@ -330,17 +449,18 @@ export function AnimatedAIChat() {
   };
 
   const selectCommandSuggestion = (index: number) => {
-    const selectedCommand = commandSuggestions[index];
-    setValue(selectedCommand.prefix + " ");
-    setShowCommandPalette(false);
-
-    if (selectedCommand.prefix === "/scan" || selectedCommand.prefix === "/batch") {
-      setTimeout(() => fileInputRef.current?.click(), 100);
-    }
+    handleCommandSelect(commandSuggestions[index]);
   };
 
+  // ── Render ───────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen flex flex-col w-full items-center justify-center bg-transparent text-white p-6 relative overflow-hidden">
+    <div
+      className="min-h-screen flex flex-col w-full items-center justify-center bg-transparent text-white p-6 relative overflow-hidden"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -351,18 +471,57 @@ export function AnimatedAIChat() {
         className="hidden"
       />
 
+      {/* Drag overlay */}
+      <AnimatePresence>
+        {isDragOver && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="flex flex-col items-center gap-4 p-12 rounded-3xl border-2 border-dashed border-violet-500/50 bg-violet-500/[0.05]"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+            >
+              <Upload className="w-12 h-12 text-violet-400" />
+              <div className="text-xl font-medium text-white/90">
+                Drop images to analyze
+              </div>
+              <div className="text-sm text-white/40">
+                Supports JPEG, PNG, WebP, and more
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Ambient background effects */}
       <div className="absolute inset-0 w-full h-full overflow-hidden">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-500/10 rounded-full mix-blend-normal filter blur-[128px] animate-pulse" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full mix-blend-normal filter blur-[128px] animate-pulse delay-700" />
-        <div className="absolute top-1/4 right-1/3 w-64 h-64 bg-fuchsia-500/10 rounded-full mix-blend-normal filter blur-[96px] animate-pulse delay-1000" />
+        <div className="absolute top-1/4 right-1/3 w-64 h-64 bg-fuchsia-500/10 rounded-full mix-blend-normal filter blur-[128px] animate-pulse delay-1000" />
       </div>
 
-      {/* Back to Home Button */}
-      <Link href="/" className="absolute top-6 left-6 md:top-8 md:left-8 z-50 inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm">
-        <ArrowLeft className="w-4 h-4" />
-        <span>Back to Home</span>
-      </Link>
+      {/* Top nav */}
+      <div className="absolute top-6 left-6 md:top-8 md:left-8 z-50 flex items-center gap-4">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Home</span>
+        </Link>
+        <Link
+          href="/history"
+          className="inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm"
+        >
+          <Clock className="w-4 h-4" />
+          <span>History</span>
+        </Link>
+      </div>
 
       <div className="w-full max-w-2xl mx-auto relative mt-12 md:mt-0">
         <motion.div
@@ -395,13 +554,18 @@ export function AnimatedAIChat() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
             >
-              Drop images below or type a command to get started
+              Drop images below, paste from clipboard, or type a command
             </motion.p>
           </div>
 
           {/* Chat Input */}
           <motion.div
-            className="relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border border-white/[0.05] shadow-2xl"
+            className={cn(
+              "relative backdrop-blur-2xl bg-white/[0.02] rounded-2xl border shadow-2xl transition-colors",
+              isDragOver
+                ? "border-violet-500/40 bg-violet-500/[0.02]"
+                : "border-white/[0.05]"
+            )}
             initial={{ scale: 0.98 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.1 }}
@@ -457,7 +621,7 @@ export function AnimatedAIChat() {
                 onKeyDown={handleKeyDown}
                 onFocus={() => setInputFocused(true)}
                 onBlur={() => setInputFocused(false)}
-                placeholder="Type /scan to analyze an image..."
+                placeholder="Type /scan to analyze an image, or drag & drop files..."
                 containerClassName="w-full"
                 className={cn(
                   "w-full px-4 py-3",
@@ -476,7 +640,7 @@ export function AnimatedAIChat() {
               />
             </div>
 
-            {/* Attachment chips */}
+            {/* Attachment chips with image previews */}
             <AnimatePresence>
               {attachments.length > 0 && (
                 <motion.div
@@ -488,13 +652,21 @@ export function AnimatedAIChat() {
                   {attachments.map((file, index) => (
                     <motion.div
                       key={index}
-                      className="flex items-center gap-2 text-xs bg-white/[0.03] py-1.5 px-3 rounded-lg text-white/70"
+                      className="flex items-center gap-2 text-xs bg-white/[0.03] py-1.5 px-2 rounded-lg text-white/70 border border-white/[0.05]"
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.9 }}
                     >
-                      <ImageIcon className="w-3 h-3 text-violet-400" />
-                      <span className="max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">
+                      {previews[index] ? (
+                        <img
+                          src={previews[index]}
+                          alt={file.name}
+                          className="w-8 h-8 rounded object-cover"
+                        />
+                      ) : (
+                        <ImageIcon className="w-3 h-3 text-violet-400" />
+                      )}
+                      <span className="max-w-[100px] overflow-hidden text-ellipsis whitespace-nowrap">
                         {file.name}
                       </span>
                       <button
@@ -613,6 +785,11 @@ export function AnimatedAIChat() {
                         <span className="text-sm font-medium text-white/90 max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap">
                           {result.filename}
                         </span>
+                        {result.processing_time_ms && (
+                          <span className="text-xs text-white/20 font-mono">
+                            {result.processing_time_ms.toFixed(0)}ms
+                          </span>
+                        )}
                       </div>
                       {result.error ? (
                         <span className="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
@@ -638,7 +815,9 @@ export function AnimatedAIChat() {
                         {/* Confidence bar */}
                         <div>
                           <div className="flex justify-between text-xs mb-1">
-                            <span className="text-white/50">SynthID Confidence</span>
+                            <span className="text-white/50">
+                              SynthID Confidence
+                            </span>
                             <span className="text-white/90 font-mono">
                               {((result.confidence || 0) * 100).toFixed(1)}%
                             </span>
@@ -660,13 +839,46 @@ export function AnimatedAIChat() {
                           </div>
                         </div>
 
-                        {/* Phase match */}
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/50">Phase Match</span>
-                          <span className="text-white/90 font-mono">
-                            {((result.phase_match || 0) * 100).toFixed(1)}%
-                          </span>
+                        {/* Phase match & multi-scale */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-white/50">Phase Match</span>
+                            <span className="text-white/90 font-mono">
+                              {((result.phase_match || 0) * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-white/50">
+                              Multi-Scale Consistency
+                            </span>
+                            <span className="text-white/90 font-mono">
+                              {(
+                                (result.multi_scale_consistency || 0) * 100
+                              ).toFixed(1)}
+                              %
+                            </span>
+                          </div>
                         </div>
+
+                        {/* Frequency spectrum visualization */}
+                        {result.spectrum_data &&
+                          result.spectrum_data.ring_energies.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-white/[0.05]">
+                              <div className="flex items-center justify-between text-xs mb-2">
+                                <span className="text-white/50">
+                                  Frequency Spectrum
+                                </span>
+                                <span className="text-white/30 font-mono">
+                                  Peak ring: {result.spectrum_data.peak_ring}
+                                </span>
+                              </div>
+                              <FrequencyBars
+                                data={result.spectrum_data.ring_energies}
+                                peakRing={result.spectrum_data.peak_ring}
+                                isWatermarked={result.is_watermarked || false}
+                              />
+                            </div>
+                          )}
 
                         {/* EXIF section */}
                         {result.exif_data &&
@@ -745,6 +957,50 @@ export function AnimatedAIChat() {
     </div>
   );
 }
+
+// ── Frequency Bars Component ──────────────────────────────────────────────
+
+function FrequencyBars({
+  data,
+  peakRing,
+  isWatermarked,
+}: {
+  data: number[];
+  peakRing: number;
+  isWatermarked: boolean;
+}) {
+  return (
+    <div className="flex items-end gap-[2px] h-16">
+      {data.map((energy, i) => {
+        const isPeak = i === peakRing;
+        const height = Math.max(2, energy * 100);
+        return (
+          <motion.div
+            key={i}
+            className="flex-1 rounded-t-sm"
+            style={{
+              backgroundColor: isPeak
+                ? isWatermarked
+                  ? "rgb(239, 68, 68)"
+                  : "rgb(16, 185, 129)"
+                : `rgba(139, 92, 246, ${0.2 + energy * 0.6})`,
+              minWidth: "2px",
+            }}
+            initial={{ height: 0 }}
+            animate={{ height: `${height}%` }}
+            transition={{
+              duration: 0.5,
+              delay: i * 0.015,
+              ease: "easeOut",
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Typing Dots ───────────────────────────────────────────────────────────
 
 function TypingDots() {
   return (
