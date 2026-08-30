@@ -23,6 +23,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
 import axios from "axios";
 import Link from "next/link";
+import { ConfidenceGauge } from "@/components/ui/confidence-gauge";
+import { FrequencySpectrum } from "@/components/ui/frequency-spectrum";
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
@@ -812,51 +814,60 @@ export function AnimatedAIChat() {
                       <p className="text-sm text-red-400">{result.error}</p>
                     ) : (
                       <div className="space-y-3">
-                        {/* Confidence bar */}
-                        <div>
-                          <div className="flex justify-between text-xs mb-1">
-                            <span className="text-white/50">
-                              SynthID Confidence
-                            </span>
-                            <span className="text-white/90 font-mono">
-                              {((result.confidence || 0) * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                            <motion.div
-                              className="h-full rounded-full"
-                              style={{
-                                backgroundColor: result.is_watermarked
-                                  ? "rgb(239, 68, 68)"
-                                  : "rgb(16, 185, 129)",
-                              }}
-                              initial={{ width: 0 }}
-                              animate={{
-                                width: `${(result.confidence || 0) * 100}%`,
-                              }}
-                              transition={{ duration: 0.8, ease: "easeOut" }}
-                            />
-                          </div>
-                        </div>
+                        {/* Confidence gauge + metrics row */}
+                        <div className="flex items-center gap-6">
+                          <ConfidenceGauge
+                            value={result.confidence || 0}
+                            size={100}
+                            isWatermarked={result.is_watermarked || false}
+                          />
+                          <div className="flex-1 space-y-3">
+                            {/* Confidence bar */}
+                            <div>
+                              <div className="flex justify-between text-xs mb-1">
+                                <span className="text-white/50">
+                                  SynthID Confidence
+                                </span>
+                                <span className="text-white/90 font-mono">
+                                  {((result.confidence || 0) * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                <motion.div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    backgroundColor: result.is_watermarked
+                                      ? "rgb(239, 68, 68)"
+                                      : "rgb(16, 185, 129)",
+                                  }}
+                                  initial={{ width: 0 }}
+                                  animate={{
+                                    width: `${(result.confidence || 0) * 100}%`,
+                                  }}
+                                  transition={{ duration: 0.8, ease: "easeOut" }}
+                                />
+                              </div>
+                            </div>
 
-                        {/* Phase match & multi-scale */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex justify-between text-xs">
-                            <span className="text-white/50">Phase Match</span>
-                            <span className="text-white/90 font-mono">
-                              {((result.phase_match || 0) * 100).toFixed(1)}%
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-white/50">
-                              Multi-Scale Consistency
-                            </span>
-                            <span className="text-white/90 font-mono">
-                              {(
-                                (result.multi_scale_consistency || 0) * 100
-                              ).toFixed(1)}
-                              %
-                            </span>
+                            {/* Phase match & multi-scale */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="flex justify-between text-xs">
+                                <span className="text-white/50">Phase Match</span>
+                                <span className="text-white/90 font-mono">
+                                  {((result.phase_match || 0) * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-xs">
+                                <span className="text-white/50">
+                                  Multi-Scale
+                                </span>
+                                <span className="text-white/90 font-mono">
+                                  {(
+                                    (result.multi_scale_consistency || 0) * 100
+                                  ).toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -866,16 +877,17 @@ export function AnimatedAIChat() {
                             <div className="mt-3 pt-3 border-t border-white/[0.05]">
                               <div className="flex items-center justify-between text-xs mb-2">
                                 <span className="text-white/50">
-                                  Frequency Spectrum
+                                  FFT Frequency Spectrum
                                 </span>
                                 <span className="text-white/30 font-mono">
                                   Peak ring: {result.spectrum_data.peak_ring}
                                 </span>
                               </div>
-                              <FrequencyBars
-                                data={result.spectrum_data.ring_energies}
+                              <FrequencySpectrum
+                                ringEnergies={result.spectrum_data.ring_energies}
                                 peakRing={result.spectrum_data.peak_ring}
                                 isWatermarked={result.is_watermarked || false}
+                                height={100}
                               />
                             </div>
                           )}
@@ -954,48 +966,6 @@ export function AnimatedAIChat() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ── Frequency Bars Component ──────────────────────────────────────────────
-
-function FrequencyBars({
-  data,
-  peakRing,
-  isWatermarked,
-}: {
-  data: number[];
-  peakRing: number;
-  isWatermarked: boolean;
-}) {
-  return (
-    <div className="flex items-end gap-[2px] h-16">
-      {data.map((energy, i) => {
-        const isPeak = i === peakRing;
-        const height = Math.max(2, energy * 100);
-        return (
-          <motion.div
-            key={i}
-            className="flex-1 rounded-t-sm"
-            style={{
-              backgroundColor: isPeak
-                ? isWatermarked
-                  ? "rgb(239, 68, 68)"
-                  : "rgb(16, 185, 129)"
-                : `rgba(139, 92, 246, ${0.2 + energy * 0.6})`,
-              minWidth: "2px",
-            }}
-            initial={{ height: 0 }}
-            animate={{ height: `${height}%` }}
-            transition={{
-              duration: 0.5,
-              delay: i * 0.015,
-              ease: "easeOut",
-            }}
-          />
-        );
-      })}
     </div>
   );
 }
