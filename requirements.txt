@@ -14,4 +14,8 @@ prometheus-client
 # Testing
 pytest
 httpx
-google-generativeai
+google-genai
+
+# ML Inference
+torch
+torchvision

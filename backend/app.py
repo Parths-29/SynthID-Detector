@@ -25,14 +25,29 @@ from PIL import Image
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from .classifier import classifier_instance
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
-import google.generativeai as genai
+from google import genai
 
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY_CHAT = os.getenv("GEMINI_API_KEY_CHAT")
+if not GEMINI_API_KEY_CHAT:
+    import sys
+    print("\n" + "="*80, file=sys.stderr)
+    print("CRITICAL WARNING: GEMINI_API_KEY_CHAT is not set!", file=sys.stderr)
+    print("Falling back to the primary GEMINI_API_KEY. /deep-scan and /ask-assistant will", file=sys.stderr)
+    print("share quota, completely breaking isolation and causing starvation.", file=sys.stderr)
+    print("="*80 + "\n", file=sys.stderr)
+    GEMINI_API_KEY_CHAT = GEMINI_API_KEY
+
+GEMINI_RPM_LIMIT = os.getenv("GEMINI_RPM_LIMIT", "12")
+
+# Initialize isolated clients
+deep_scan_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
+chat_client = genai.Client(api_key=GEMINI_API_KEY_CHAT) if GEMINI_API_KEY_CHAT else None
 
 # Add ml directory to path so we can import the extractor
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ml')))
@@ -72,7 +87,20 @@ app = FastAPI(
     version="2.0.0",
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded) -> Response:
+    temp_resp = Response()
+    temp_resp = request.app.state.limiter._inject_headers(temp_resp, request.state.view_rate_limit)
+    retry_after = temp_resp.headers.get("retry-after", "60")
+    
+    response = JSONResponse(
+        {"status": "rate_limited", "retry_after_seconds": int(retry_after)},
+        status_code=429
+    )
+    response.headers["Retry-After"] = retry_after
+    return response
+
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
 
 # CORS — configurable via environment variable
 ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
@@ -151,7 +179,7 @@ def _extract_exif(contents: bytes) -> dict:
 # ── Single image detection ─────────────────────────────────────────────────
 
 @app.post("/detect")
-@limiter.limit("10/minute")
+@limiter.limit(f"{GEMINI_RPM_LIMIT}/minute")
 async def detect_watermark(request: Request, image: UploadFile = File(...)):
     """
     Analyze a single image for SynthID watermarks.
@@ -164,7 +192,7 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
 
     REQUEST_COUNT.inc()
     start_time = time.time()
-
+    try:
         contents = await image.read()
         file_hash = hashlib.sha256(contents).hexdigest()
         
@@ -184,25 +212,24 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
         # Convert BGR to RGB
         img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-        try:
-            with PROCESSING_TIME.time():
-                result = extractor.detect_from_v4_codebook(
-                    img_rgb,
-                    codebook,
-                    model=None
-                )
+        with PROCESSING_TIME.time():
+            result = extractor.detect_from_v4_codebook(
+                img_rgb,
+                codebook,
+                model=None
+            )
 
-            # --- METADATA SIGNATURE CHECK ---
-            exif_str = str(exif_data).lower()
-            contents_lower = contents.lower()
-            
-            has_exif_sig = "google" in exif_str or "gemini" in exif_str or "deepmind" in exif_str
-            has_byte_sig = b"google" in contents_lower or b"gemini" in contents_lower or b"deepmind" in contents_lower
-            
-            result.details["metadata_signature_found"] = bool(has_exif_sig or has_byte_sig)
+        # --- METADATA SIGNATURE CHECK ---
+        exif_str = str(exif_data).lower()
+        contents_lower = contents.lower()
+        
+        has_exif_sig = "google" in exif_str or "gemini" in exif_str or "deepmind" in exif_str
+        has_byte_sig = b"google" in contents_lower or b"gemini" in contents_lower or b"deepmind" in contents_lower
+        
+        result.details["metadata_signature_found"] = bool(has_exif_sig or has_byte_sig)
 
-            if result.is_watermarked:
-                DETECTED_COUNT.inc()
+        if result.is_watermarked:
+            DETECTED_COUNT.inc()
 
         processing_time_ms = round((time.time() - start_time) * 1000, 2)
 
@@ -273,20 +300,36 @@ async def get_batch_status(job_id: str):
 class ChatRequest(BaseModel):
     message: str
     detection_context: Optional[dict] = None
+    deep_scan_context: Optional[dict] = None
+    classify_context: Optional[dict] = None
 
 @app.post("/ask-assistant")
-@limiter.limit("20/minute")
+@limiter.limit(f"{GEMINI_RPM_LIMIT}/minute")
 async def ask_assistant(request: Request, chat_req: ChatRequest):
     """Chat with the Gemini Assistant about the image analysis."""
     try:
-        model = genai.GenerativeModel('gemini-flash-latest')
         
         prompt = f"User Question: {chat_req.message}\n\n"
         if chat_req.detection_context:
-            prompt += f"Context (Image Analysis Results):\n{chat_req.detection_context}\n\n"
-            prompt += "Please use the context to answer the user's question about the image watermark detection. If they ask about removing the watermark, gently explain that removing watermarks can defeat authenticity checks, but provide an educational answer about how watermarks work and the theoretical difficulty of removing them."
+            prompt += f"Context (Watermark & Metadata):\n{chat_req.detection_context}\n\n"
+        if chat_req.classify_context:
+            prompt += f"Context (Trained Model Verdict):\n{chat_req.classify_context}\n\n"
+        if chat_req.deep_scan_context:
+            prompt += f"Context (AI Narrative):\n{chat_req.deep_scan_context}\n\n"
             
-        response = await model.generate_content_async(prompt)
+        prompt += (
+            "System Instructions:\n"
+            "Answer using only the provided signals above. "
+            "Do not state a new confidence number or invent your own probability. "
+            "Do not contradict the provided panels. "
+            "If asked what you think about the image's authenticity, defer to the trained model's probability as the primary number."
+        )
+            
+        # Using google-genai
+        response = await chat_client.aio.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt
+        )
         return {"response": response.text}
     except Exception as e:
         error_msg = str(e)
@@ -295,8 +338,19 @@ async def ask_assistant(request: Request, chat_req: ChatRequest):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@app.post("/classify")
+@limiter.limit(f"{GEMINI_RPM_LIMIT}/minute")
+async def classify_image(request: Request, image: UploadFile = File(...)):
+    """Run the image through the trained PyTorch classification model."""
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File provided is not an image.")
+        
+    contents = await image.read()
+    return classifier_instance.run_inference(contents)
+
+
 @app.post("/deep-scan")
-@limiter.limit("10/minute")
+@limiter.limit(f"{GEMINI_RPM_LIMIT}/minute")
 async def deep_scan(request: Request, image: UploadFile = File(...)):
     """Visually analyze image for AI artifacts using Gemini."""
     if not image.content_type or not image.content_type.startswith("image/"):
@@ -309,7 +363,6 @@ async def deep_scan(request: Request, image: UploadFile = File(...)):
         return _deep_scan_cache[file_hash]
         
     try:
-        model = genai.GenerativeModel('gemini-flash-latest')
         pil_image = Image.open(io.BytesIO(contents))
         
         prompt = (
@@ -321,7 +374,11 @@ async def deep_scan(request: Request, image: UploadFile = File(...)):
             "Reasoning: [Your detailed forensic reasoning]"
         )
         
-        response = await model.generate_content_async([prompt, pil_image])
+        # Using google-genai
+        response = await deep_scan_client.aio.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=[prompt, pil_image]
+        )
         text = response.text
         
         likelihood = "Medium"

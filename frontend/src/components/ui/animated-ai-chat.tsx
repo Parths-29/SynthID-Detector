@@ -213,6 +213,7 @@ export function AnimatedAIChat() {
   const [results, setResults] = useState<DetectionResult[]>([]);
   const [scannedFiles, setScannedFiles] = useState<Record<string, File>>({});
   const [deepScanResults, setDeepScanResults] = useState<Record<string, any>>({});
+  const [classifyResults, setClassifyResults] = useState<Record<string, any>>({});
   const [isDeepScanning, setIsDeepScanning] = useState<Record<string, boolean>>({});
   const [isDragOver, setIsDragOver] = useState(false);
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
@@ -357,6 +358,7 @@ export function AnimatedAIChat() {
     setIsTyping(true);
     setResults([]);
 
+    if (attachments.length === 1) {
       const formData = new FormData();
       formData.append("image", attachments[0]);
       try {
@@ -368,6 +370,14 @@ export function AnimatedAIChat() {
         setResults([result]);
         setScannedFiles(prev => ({ ...prev, [attachments[0].name]: attachments[0] }));
         saveToHistory(result);
+
+        // Run classify alongside detect
+        try {
+          const classifyRes = await axios.post(`${API_BASE_URL}/classify`, formData);
+          setClassifyResults(prev => ({ ...prev, [attachments[0].name]: classifyRes.data }));
+        } catch (e) {
+          console.error("Classification failed:", e);
+        }
       } catch (err: unknown) {
         const error = err as {
           response?: { data?: { detail?: string } };
@@ -448,9 +458,13 @@ export function AnimatedAIChat() {
     try {
       const res = await axios.post(`${API_BASE_URL}/deep-scan`, formData);
       setDeepScanResults(prev => ({ ...prev, [filename]: res.data }));
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setDeepScanResults(prev => ({ ...prev, [filename]: { error: "Failed to run deep scan. Rate limit may be exceeded." } }));
+      let errorMsg = "Failed to run deep scan. Please try again.";
+      if (e.response?.status === 429 && e.response?.data?.status === 'rate_limited') {
+        errorMsg = `Rate limit reached, try again in ~${e.response.data.retry_after_seconds}s`;
+      }
+      setDeepScanResults(prev => ({ ...prev, [filename]: { error: errorMsg } }));
     } finally {
       setIsDeepScanning(prev => ({ ...prev, [filename]: false }));
     }
@@ -817,25 +831,10 @@ export function AnimatedAIChat() {
                         )}
                       </div>
                       <div className="flex items-center gap-3">
-                        {result.details?.metadata_signature_found && (
+                        {Boolean(result.details?.metadata_signature_found) && (
                           <span className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
                             <CheckCircle className="w-3 h-3" />
                             Metadata Signature Found
-                          </span>
-                        )}
-                        {result.is_watermarked === undefined ? (
-                          <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/50 border border-white/10">
-                            Error
-                          </span>
-                        ) : result.is_watermarked ? (
-                          <span className="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            AI Watermark Detected
-                          </span>
-                        ) : (
-                          <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3" />
-                            No Watermark
                           </span>
                         )}
                       </div>
@@ -844,153 +843,220 @@ export function AnimatedAIChat() {
                     {result.error ? (
                       <p className="text-sm text-red-400">{result.error}</p>
                     ) : (
-                      <div className="space-y-3">
-                        {/* Confidence gauge + metrics row */}
-                        <div className="flex items-center gap-6">
-                          <ConfidenceGauge
-                            value={result.confidence || 0}
-                            size={100}
-                            isWatermarked={result.is_watermarked || false}
-                          />
-                          <div className="flex-1 space-y-3">
-                            {/* Confidence bar */}
-                            <div>
-                              <div className="flex justify-between text-xs mb-1">
-                                <span className="text-white/50">
-                                  SynthID Confidence
-                                </span>
-                                <span className="text-white/90 font-mono">
-                                  {((result.confidence || 0) * 100).toFixed(1)}%
-                                </span>
-                              </div>
-                              <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                                <motion.div
-                                  className="h-full rounded-full"
-                                  style={{
-                                    backgroundColor: result.is_watermarked
-                                      ? "rgb(239, 68, 68)"
-                                      : "rgb(16, 185, 129)",
-                                  }}
-                                  initial={{ width: 0 }}
-                                  animate={{
-                                    width: `${(result.confidence || 0) * 100}%`,
-                                  }}
-                                  transition={{ duration: 0.8, ease: "easeOut" }}
-                                />
-                              </div>
+                      <div className="space-y-4">
+                        {/* 1. Trained Model Verdict (Primary) */}
+                        <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-white/90 mb-3 flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-violet-400" />
+                            Trained Model Verdict
+                          </h4>
+                          {!classifyResults[result.filename] ? (
+                            <div className="text-sm text-white/40">Running classification model...</div>
+                          ) : classifyResults[result.filename].model_status === "not_trained" ? (
+                            <div className="text-sm text-yellow-400/80 bg-yellow-400/10 px-3 py-2 rounded-md inline-block">
+                              Model not yet trained — dev preview
                             </div>
-
-                            {/* Phase match & multi-scale */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="flex justify-between text-xs">
-                                <span className="text-white/50">Phase Match</span>
-                                <span className="text-white/90 font-mono">
-                                  {((result.phase_match || 0) * 100).toFixed(1)}%
-                                </span>
+                          ) : (
+                            <div className="flex gap-4">
+                              <div className="flex-1">
+                                <div className="text-xs text-white/50 mb-1">AI Probability Score</div>
+                                <div className="text-2xl font-mono text-white/90">
+                                  {(classifyResults[result.filename].probability * 100).toFixed(1)}%
+                                </div>
+                                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden mt-2">
+                                  <div
+                                    className="h-full rounded-full bg-violet-500"
+                                    style={{ width: `${classifyResults[result.filename].probability * 100}%` }}
+                                  />
+                                </div>
                               </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-white/50">
-                                  Multi-Scale
-                                </span>
-                                <span className="text-white/90 font-mono">
-                                  {(
-                                    (result.multi_scale_consistency || 0) * 100
-                                  ).toFixed(1)}%
-                                </span>
-                              </div>
+                              {classifyResults[result.filename].heatmap && (
+                                <div className="w-24 h-24 shrink-0 rounded-lg overflow-hidden border border-white/10 relative">
+                                  <img 
+                                    src={classifyResults[result.filename].heatmap} 
+                                    alt="Grad-CAM Heatmap" 
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-white/80 text-center py-0.5">
+                                    Grad-CAM
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
+                          )}
                         </div>
 
-                        {/* Frequency spectrum visualization */}
-                        {result.spectrum_data &&
-                          result.spectrum_data.ring_energies.length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-white/[0.05]">
-                              <div className="flex items-center justify-between text-xs mb-2">
-                                <span className="text-white/50">
-                                  FFT Frequency Spectrum
-                                </span>
-                                <span className="text-white/30 font-mono">
-                                  Peak ring: {result.spectrum_data.peak_ring}
+                        {/* 2. Metadata Signature (Secondary) */}
+                        <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-white/90 mb-2">Metadata Forensics</h4>
+                          {result.details?.metadata_signature_found ? (
+                             <div className="text-sm text-blue-300 flex items-center gap-2">
+                               <CheckCircle className="w-4 h-4" />
+                               Metadata Signature Found: Yes
+                             </div>
+                          ) : (
+                             <div className="text-sm text-white/50">
+                               No recognizable AI generator metadata found.
+                             </div>
+                          )}
+                        </div>
+
+                        {/* 3. AI Reasoning (Gemini) */}
+                        <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-4">
+                          <h4 className="text-sm font-semibold text-white/90 mb-3">AI Visual Reasoning</h4>
+                          {!deepScanResults[result.filename] ? (
+                            <button
+                              onClick={() => runDeepScan(result.filename)}
+                              disabled={isDeepScanning[result.filename]}
+                              className="flex items-center justify-center w-full gap-2 text-sm bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors py-2 rounded-md"
+                            >
+                              {isDeepScanning[result.filename] ? (
+                                <><LoaderIcon className="w-4 h-4 animate-spin" /> Running Deep Scan...</>
+                              ) : (
+                                <><Sparkles className="w-4 h-4" /> Run AI Visual Deep Scan</>
+                              )}
+                            </button>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full",
+                                  deepScanResults[result.filename].likelihood === 'High' ? 'bg-red-500/20 text-red-300' :
+                                  deepScanResults[result.filename].likelihood === 'Low' ? 'bg-emerald-500/20 text-emerald-300' :
+                                  'bg-yellow-500/20 text-yellow-300'
+                                )}>
+                                  {deepScanResults[result.filename].likelihood} Likelihood
                                 </span>
                               </div>
-                              <FrequencySpectrum
-                                ringEnergies={result.spectrum_data.ring_energies}
-                                peakRing={result.spectrum_data.peak_ring}
+                              {deepScanResults[result.filename].error ? (
+                                <p className="text-sm text-red-400/80">{deepScanResults[result.filename].error}</p>
+                              ) : (
+                                <p className="text-sm text-white/70 leading-relaxed">
+                                  {deepScanResults[result.filename].reasoning}
+                                  <br />
+                                  <span className="text-[10px] text-white/30 italic mt-2 block">(AI-assisted narrative, not a mathematical measurement)</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Advanced Details (Hidden by default or minimized) */}
+                        <details className="text-xs text-white/40 cursor-pointer">
+                          <summary className="outline-none hover:text-white/60 transition-colors">Show legacy heuristic details</summary>
+                          <div className="mt-2 pl-4 border-l border-white/10 space-y-3">
+                            {/* Confidence gauge + metrics row */}
+                            <div className="flex items-center gap-6">
+                              <ConfidenceGauge
+                                value={result.confidence || 0}
+                                size={60}
                                 isWatermarked={result.is_watermarked || false}
-                                height={100}
                               />
-                            </div>
-                          )}
-
-                        {/* EXIF section */}
-                        {result.exif_data &&
-                          Object.keys(result.exif_data).length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-white/[0.05]">
-                              <div className="text-xs text-white/50 mb-2">
-                                EXIF Metadata
-                              </div>
-                              <div className="max-h-32 overflow-y-auto space-y-1">
-                                {Object.entries(result.exif_data).map(
-                                  ([key, val], i) => (
-                                    <div
-                                      key={i}
-                                      className="flex justify-between text-xs"
-                                    >
-                                      <span className="text-white/30 mr-4 shrink-0">
-                                        {key}
-                                      </span>
-                                      <span className="text-white/60 text-right break-all">
-                                        {val}
-                                      </span>
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Deep Scan UI */}
-                          <div className="mt-4 pt-4 border-t border-white/[0.05]">
-                            {!deepScanResults[result.filename] ? (
-                              <button
-                                onClick={() => runDeepScan(result.filename)}
-                                disabled={isDeepScanning[result.filename]}
-                                className="flex items-center justify-center w-full gap-2 text-sm bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors py-2 rounded-md"
-                              >
-                                {isDeepScanning[result.filename] ? (
-                                  <><LoaderIcon className="w-4 h-4 animate-spin" /> Running Deep Scan...</>
-                                ) : (
-                                  <><Sparkles className="w-4 h-4" /> Run AI Visual Deep Scan</>
-                                )}
-                              </button>
-                            ) : (
-                              <div className="bg-black/30 rounded-lg p-3 space-y-2 border border-white/5">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-white/50 uppercase tracking-wider">AI Visual Assessment</span>
-                                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full",
-                                    deepScanResults[result.filename].likelihood === 'High' ? 'bg-red-500/20 text-red-300' :
-                                    deepScanResults[result.filename].likelihood === 'Low' ? 'bg-emerald-500/20 text-emerald-300' :
-                                    'bg-yellow-500/20 text-yellow-300'
-                                  )}>
-                                    {deepScanResults[result.filename].likelihood} Likelihood
-                                  </span>
+                              <div className="flex-1 space-y-3">
+                                {/* Confidence bar */}
+                                <div>
+                                  <div className="flex justify-between text-xs mb-1">
+                                    <span className="text-white/50">
+                                      SynthID Confidence
+                                    </span>
+                                    <span className="text-white/90 font-mono">
+                                      {((result.confidence || 0) * 100).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                                    <motion.div
+                                      className="h-full rounded-full"
+                                      style={{
+                                        backgroundColor: result.is_watermarked
+                                          ? "rgb(239, 68, 68)"
+                                          : "rgb(16, 185, 129)",
+                                      }}
+                                      initial={{ width: 0 }}
+                                      animate={{
+                                        width: `${(result.confidence || 0) * 100}%`,
+                                      }}
+                                      transition={{ duration: 0.8, ease: "easeOut" }}
+                                    />
+                                  </div>
                                 </div>
-                                {deepScanResults[result.filename].error ? (
-                                  <p className="text-sm text-red-400/80">{deepScanResults[result.filename].error}</p>
-                                ) : (
-                                  <p className="text-sm text-white/70 leading-relaxed">
-                                    {deepScanResults[result.filename].reasoning}
-                                    <br />
-                                    <span className="text-[10px] text-white/30 italic mt-2 block">(AI-assisted narrative, not a mathematical measurement)</span>
-                                  </p>
-                                )}
+    
+                                {/* Phase match & multi-scale */}
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-white/50">Phase Match</span>
+                                    <span className="text-white/90 font-mono">
+                                      {((result.phase_match || 0) * 100).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-white/50">
+                                      Multi-Scale
+                                    </span>
+                                    <span className="text-white/90 font-mono">
+                                      {(
+                                        (result.multi_scale_consistency || 0) * 100
+                                      ).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            )}
+                            </div>
+    
+                            {/* Frequency spectrum visualization */}
+                            {result.spectrum_data &&
+                              result.spectrum_data.ring_energies.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-white/[0.05]">
+                                  <div className="flex items-center justify-between text-xs mb-2">
+                                    <span className="text-white/50">
+                                      FFT Frequency Spectrum
+                                    </span>
+                                    <span className="text-white/30 font-mono">
+                                      Peak ring: {result.spectrum_data.peak_ring}
+                                    </span>
+                                  </div>
+                                  <FrequencySpectrum
+                                    ringEnergies={result.spectrum_data.ring_energies}
+                                    peakRing={result.spectrum_data.peak_ring}
+                                    isWatermarked={result.is_watermarked || false}
+                                    height={100}
+                                  />
+                                </div>
+                              )}
+    
+                            {/* EXIF section */}
+                            {result.exif_data &&
+                              Object.keys(result.exif_data).length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-white/[0.05]">
+                                  <div className="text-xs text-white/50 mb-2">
+                                    EXIF Metadata
+                                  </div>
+                                  <div className="max-h-32 overflow-y-auto space-y-1">
+                                    {Object.entries(result.exif_data).map(
+                                      ([key, val], i) => (
+                                        <div
+                                          key={i}
+                                          className="flex justify-between text-xs"
+                                        >
+                                          <span className="text-white/30 mr-4 shrink-0">
+                                            {key}
+                                          </span>
+                                          <span className="text-white/60 text-right break-all">
+                                            {val}
+                                          </span>
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                           </div>
+                        </details>
 
                         {/* Gemini Assistant */}
-                        <DetectionAssistant result={result} />
+                        <DetectionAssistant 
+                          result={result} 
+                          deepScanResult={deepScanResults[result.filename]}
+                          classifyResult={classifyResults[result.filename]}
+                        />
                       </div>
                     )}
                   </motion.div>
@@ -1074,7 +1140,15 @@ function TypingDots() {
 
 // ── Gemini Assistant Component ──────────────────────────────────────────────
 
-function DetectionAssistant({ result }: { result: DetectionResult }) {
+function DetectionAssistant({ 
+  result, 
+  deepScanResult,
+  classifyResult 
+}: { 
+  result: DetectionResult,
+  deepScanResult?: any,
+  classifyResult?: any
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([]);
   const [input, setInput] = useState("");
@@ -1091,11 +1165,17 @@ function DetectionAssistant({ result }: { result: DetectionResult }) {
     try {
       const response = await axios.post("http://localhost:8000/ask-assistant", {
         message: userMsg,
-        detection_context: result
+        detection_context: result,
+        deep_scan_context: deepScanResult,
+        classify_context: classifyResult
       });
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I couldn't reach the AI assistant. Please try again." }]);
+    } catch (e: any) {
+      let errorMsg = "Sorry, I couldn't reach the AI assistant. Please try again.";
+      if (e.response?.status === 429 && e.response?.data?.status === 'rate_limited') {
+        errorMsg = `Rate limit reached, try again in ~${e.response.data.retry_after_seconds}s`;
+      }
+      setMessages(prev => [...prev, { role: 'assistant', content: errorMsg }]);
     } finally {
       setIsLoading(false);
     }
@@ -1108,7 +1188,7 @@ function DetectionAssistant({ result }: { result: DetectionResult }) {
         className="flex items-center gap-2 text-sm text-violet-400 hover:text-violet-300 transition-colors"
       >
         <Sparkles className="w-4 h-4" />
-        {isOpen ? "Close AI Assistant" : "Ask AI Assistant"}
+        {isOpen ? "Close AI Assistant" : "Ask about this result"}
       </button>
 
       <AnimatePresence>
