@@ -1,7 +1,28 @@
-FROM node:18-alpine
+# ── Stage 1: Build ──────────────────────────────────────────────────────
+FROM node:18-alpine AS builder
+
 WORKDIR /app
+
+# Install dependencies first (cached layer)
 COPY package*.json ./
-RUN npm install
+RUN npm ci || npm install
+
+# Copy source and build
 COPY . .
+RUN npm run build
+
+# ── Stage 2: Production ────────────────────────────────────────────────
+FROM node:18-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Copy only what we need to run
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+
 EXPOSE 3000
-CMD ["npm", "run", "dev"]
+
+CMD ["node", "server.js"]
