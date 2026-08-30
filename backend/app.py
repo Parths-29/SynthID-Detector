@@ -14,17 +14,25 @@ import cv2
 import numpy as np
 import time
 import threading
+import hashlib
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import io
 import uuid
 import exifread
+from PIL import Image
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from fastapi.responses import Response
+from pydantic import BaseModel
+import google.generativeai as genai
+
+# Configure Gemini API
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Add ml directory to path so we can import the extractor
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'ml')))
@@ -113,6 +121,10 @@ BATCH_JOB_TTL_SECONDS = int(os.getenv("BATCH_JOB_TTL", "3600"))  # 1 hour defaul
 batch_jobs: dict = {}
 _batch_lock = threading.Lock()
 
+# ── SHA-256 Cache ───────────────────────────────────────────────────────────
+_detection_cache = {}
+_deep_scan_cache = {}
+
 
 def _cleanup_expired_jobs():
     """Remove batch jobs older than TTL."""
@@ -153,30 +165,44 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
     REQUEST_COUNT.inc()
     start_time = time.time()
 
-    contents = await image.read()
+        contents = await image.read()
+        file_hash = hashlib.sha256(contents).hexdigest()
+        
+        if file_hash in _detection_cache:
+            REQUEST_COUNT.inc()
+            return _detection_cache[file_hash]
 
-    # Extract EXIF data
-    exif_data = _extract_exif(contents)
+        # Extract EXIF data
+        exif_data = _extract_exif(contents)
 
-    nparr = np.frombuffer(contents, np.uint8)
-    img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        nparr = np.frombuffer(contents, np.uint8)
+        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    if img_cv is None:
-        raise HTTPException(status_code=400, detail="Could not decode image.")
+        if img_cv is None:
+            raise HTTPException(status_code=400, detail="Could not decode image.")
 
-    # Convert BGR to RGB
-    img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+        # Convert BGR to RGB
+        img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
 
-    try:
-        with PROCESSING_TIME.time():
-            result = extractor.detect_from_v4_codebook(
-                img_rgb,
-                codebook,
-                model=None
-            )
+        try:
+            with PROCESSING_TIME.time():
+                result = extractor.detect_from_v4_codebook(
+                    img_rgb,
+                    codebook,
+                    model=None
+                )
 
-        if result.is_watermarked:
-            DETECTED_COUNT.inc()
+            # --- METADATA SIGNATURE CHECK ---
+            exif_str = str(exif_data).lower()
+            contents_lower = contents.lower()
+            
+            has_exif_sig = "google" in exif_str or "gemini" in exif_str or "deepmind" in exif_str
+            has_byte_sig = b"google" in contents_lower or b"gemini" in contents_lower or b"deepmind" in contents_lower
+            
+            result.details["metadata_signature_found"] = bool(has_exif_sig or has_byte_sig)
+
+            if result.is_watermarked:
+                DETECTED_COUNT.inc()
 
         processing_time_ms = round((time.time() - start_time) * 1000, 2)
 
@@ -194,14 +220,7 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
             "spectrum_data": spectrum_data,
         }
 
-        # ── MongoDB placeholder: persist result ──
-        # if db is not None:
-        #     await db.scan_results.insert_one({
-        #         **response,
-        #         "filename": image.filename,
-        #         "created_at": datetime.utcnow(),
-        #     })
-
+        _detection_cache[file_hash] = response
         return response
 
     except Exception as e:
@@ -247,6 +266,83 @@ async def get_batch_status(job_id: str):
     if job_id not in batch_jobs:
         raise HTTPException(status_code=404, detail="Job not found or expired.")
     return batch_jobs[job_id]
+
+
+# ── AI Assistant Endpoint ──────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    message: str
+    detection_context: Optional[dict] = None
+
+@app.post("/ask-assistant")
+@limiter.limit("20/minute")
+async def ask_assistant(request: Request, chat_req: ChatRequest):
+    """Chat with the Gemini Assistant about the image analysis."""
+    try:
+        model = genai.GenerativeModel('gemini-flash-latest')
+        
+        prompt = f"User Question: {chat_req.message}\n\n"
+        if chat_req.detection_context:
+            prompt += f"Context (Image Analysis Results):\n{chat_req.detection_context}\n\n"
+            prompt += "Please use the context to answer the user's question about the image watermark detection. If they ask about removing the watermark, gently explain that removing watermarks can defeat authenticity checks, but provide an educational answer about how watermarks work and the theoretical difficulty of removing them."
+            
+        response = await model.generate_content_async(prompt)
+        return {"response": response.text}
+    except Exception as e:
+        error_msg = str(e)
+        if "429" in error_msg or "Quota exceeded" in error_msg:
+            return {"response": "I'm receiving too many requests right now (rate limit exceeded). Please try again in about a minute!"}
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+@app.post("/deep-scan")
+@limiter.limit("10/minute")
+async def deep_scan(request: Request, image: UploadFile = File(...)):
+    """Visually analyze image for AI artifacts using Gemini."""
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File provided is not an image.")
+        
+    contents = await image.read()
+    file_hash = hashlib.sha256(contents).hexdigest()
+    
+    if file_hash in _deep_scan_cache:
+        return _deep_scan_cache[file_hash]
+        
+    try:
+        model = genai.GenerativeModel('gemini-flash-latest')
+        pil_image = Image.open(io.BytesIO(contents))
+        
+        prompt = (
+            "Analyze this image for visual artifacts typical of AI generation "
+            "(Midjourney, DALL-E, Stable Diffusion, Gemini). Look for unnatural textures, "
+            "strange text, anatomical errors, bizarre lighting, or excessive symmetry. "
+            "Return your response in exactly this format:\n"
+            "Likelihood: [Low / Medium / High]\n"
+            "Reasoning: [Your detailed forensic reasoning]"
+        )
+        
+        response = await model.generate_content_async([prompt, pil_image])
+        text = response.text
+        
+        likelihood = "Medium"
+        if "Likelihood: Low" in text:
+            likelihood = "Low"
+        elif "Likelihood: High" in text:
+            likelihood = "High"
+            
+        reasoning = text.split("Reasoning:")[-1].strip() if "Reasoning:" in text else text
+        
+        result = {
+            "likelihood": likelihood,
+            "reasoning": reasoning
+        }
+        _deep_scan_cache[file_hash] = result
+        return result
+    except Exception as e:
+        error_msg = str(e)
+        if "429" in error_msg or "Quota exceeded" in error_msg:
+            raise HTTPException(status_code=429, detail="API rate limit exceeded. Please try again later.")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 def process_batch(job_id: str, files_data: List[tuple]):

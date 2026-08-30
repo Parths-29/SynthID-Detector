@@ -211,6 +211,9 @@ export function AnimatedAIChat() {
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [results, setResults] = useState<DetectionResult[]>([]);
+  const [scannedFiles, setScannedFiles] = useState<Record<string, File>>({});
+  const [deepScanResults, setDeepScanResults] = useState<Record<string, any>>({});
+  const [isDeepScanning, setIsDeepScanning] = useState<Record<string, boolean>>({});
   const [isDragOver, setIsDragOver] = useState(false);
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
     minHeight: 60,
@@ -354,7 +357,6 @@ export function AnimatedAIChat() {
     setIsTyping(true);
     setResults([]);
 
-    if (attachments.length === 1) {
       const formData = new FormData();
       formData.append("image", attachments[0]);
       try {
@@ -364,6 +366,7 @@ export function AnimatedAIChat() {
           ...res.data,
         };
         setResults([result]);
+        setScannedFiles(prev => ({ ...prev, [attachments[0].name]: attachments[0] }));
         saveToHistory(result);
       } catch (err: unknown) {
         const error = err as {
@@ -430,6 +433,26 @@ export function AnimatedAIChat() {
       }
     } catch {
       setIsTyping(false);
+    }
+  };
+
+  const runDeepScan = async (filename: string) => {
+    const file = scannedFiles[filename];
+    if (!file) return;
+    
+    setIsDeepScanning(prev => ({ ...prev, [filename]: true }));
+    
+    const formData = new FormData();
+    formData.append("image", file);
+    
+    try {
+      const res = await axios.post(`${API_BASE_URL}/deep-scan`, formData);
+      setDeepScanResults(prev => ({ ...prev, [filename]: res.data }));
+    } catch (e) {
+      console.error(e);
+      setDeepScanResults(prev => ({ ...prev, [filename]: { error: "Failed to run deep scan. Rate limit may be exceeded." } }));
+    } finally {
+      setIsDeepScanning(prev => ({ ...prev, [filename]: false }));
     }
   };
 
@@ -793,21 +816,29 @@ export function AnimatedAIChat() {
                           </span>
                         )}
                       </div>
-                      {result.error ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
-                          Error
-                        </span>
-                      ) : result.is_watermarked ? (
-                        <span className="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" />
-                          AI Watermark Detected
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                          <CheckCircle className="w-3 h-3" />
-                          Clear
-                        </span>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {result.details?.metadata_signature_found && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            Metadata Signature Found
+                          </span>
+                        )}
+                        {result.is_watermarked === undefined ? (
+                          <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/50 border border-white/10">
+                            Error
+                          </span>
+                        ) : result.is_watermarked ? (
+                          <span className="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            AI Watermark Detected
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3" />
+                            No Watermark
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {result.error ? (
@@ -897,7 +928,7 @@ export function AnimatedAIChat() {
                           Object.keys(result.exif_data).length > 0 && (
                             <div className="mt-3 pt-3 border-t border-white/[0.05]">
                               <div className="text-xs text-white/50 mb-2">
-                                EXIF / C2PA Metadata
+                                EXIF Metadata
                               </div>
                               <div className="max-h-32 overflow-y-auto space-y-1">
                                 {Object.entries(result.exif_data).map(
@@ -918,6 +949,48 @@ export function AnimatedAIChat() {
                               </div>
                             </div>
                           )}
+
+                          {/* Deep Scan UI */}
+                          <div className="mt-4 pt-4 border-t border-white/[0.05]">
+                            {!deepScanResults[result.filename] ? (
+                              <button
+                                onClick={() => runDeepScan(result.filename)}
+                                disabled={isDeepScanning[result.filename]}
+                                className="flex items-center justify-center w-full gap-2 text-sm bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors py-2 rounded-md"
+                              >
+                                {isDeepScanning[result.filename] ? (
+                                  <><LoaderIcon className="w-4 h-4 animate-spin" /> Running Deep Scan...</>
+                                ) : (
+                                  <><Sparkles className="w-4 h-4" /> Run AI Visual Deep Scan</>
+                                )}
+                              </button>
+                            ) : (
+                              <div className="bg-black/30 rounded-lg p-3 space-y-2 border border-white/5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-white/50 uppercase tracking-wider">AI Visual Assessment</span>
+                                  <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full",
+                                    deepScanResults[result.filename].likelihood === 'High' ? 'bg-red-500/20 text-red-300' :
+                                    deepScanResults[result.filename].likelihood === 'Low' ? 'bg-emerald-500/20 text-emerald-300' :
+                                    'bg-yellow-500/20 text-yellow-300'
+                                  )}>
+                                    {deepScanResults[result.filename].likelihood} Likelihood
+                                  </span>
+                                </div>
+                                {deepScanResults[result.filename].error ? (
+                                  <p className="text-sm text-red-400/80">{deepScanResults[result.filename].error}</p>
+                                ) : (
+                                  <p className="text-sm text-white/70 leading-relaxed">
+                                    {deepScanResults[result.filename].reasoning}
+                                    <br />
+                                    <span className="text-[10px] text-white/30 italic mt-2 block">(AI-assisted narrative, not a mathematical measurement)</span>
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                        {/* Gemini Assistant */}
+                        <DetectionAssistant result={result} />
                       </div>
                     )}
                   </motion.div>
@@ -995,6 +1068,93 @@ function TypingDots() {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+// ── Gemini Assistant Component ──────────────────────────────────────────────
+
+function DetectionAssistant({ result }: { result: DetectionResult }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<{role: 'user' | 'assistant', content: string}[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSend = async () => {
+    if (!input.trim()) return;
+    
+    const userMsg = input.trim();
+    setInput("");
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    setIsLoading(true);
+
+    try {
+      const response = await axios.post("http://localhost:8000/ask-assistant", {
+        message: userMsg,
+        detection_context: result
+      });
+      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I couldn't reach the AI assistant. Please try again." }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 pt-4 border-t border-white/[0.05]">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 text-sm text-violet-400 hover:text-violet-300 transition-colors"
+      >
+        <Sparkles className="w-4 h-4" />
+        {isOpen ? "Close AI Assistant" : "Ask AI Assistant"}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 space-y-3 overflow-hidden"
+          >
+            <div className="bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 text-sm flex flex-col">
+              {messages.length === 0 && (
+                <div className="text-white/40 text-center py-2">Ask me anything about this detection result...</div>
+              )}
+              {messages.map((m, i) => (
+                <div key={i} className={cn("p-2 rounded-md max-w-[90%]", m.role === 'user' ? "bg-white/10 self-end text-right" : "bg-violet-500/10 text-violet-100 self-start text-left")} style={{ whiteSpace: 'pre-wrap' }}>
+                  {m.content}
+                </div>
+              ))}
+              {isLoading && (
+                <div className="bg-violet-500/10 text-violet-100 p-2 rounded-md max-w-[80%] self-start flex items-center gap-2">
+                  <LoaderIcon className="w-3 h-3 animate-spin" /> Thinking...
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSend()}
+                placeholder="How does this work? Can it be removed?"
+                className="flex-1 bg-white/5 border border-white/10 rounded-md px-3 py-1.5 text-sm text-white/90 placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-violet-500/50"
+              />
+              <button 
+                onClick={handleSend}
+                disabled={isLoading || !input.trim()}
+                className="bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Send
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -10,7 +10,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
-An advanced, production-ready tool designed to verify image authenticity. It scans for Google's SynthID invisible watermarks, analyzes EXIF metadata, and extracts C2PA content credentials to help you distinguish between human-made and AI-generated imagery.
+An advanced, production-ready tool designed to verify image authenticity. It uses a watermark-inspired frequency heuristic (FFT), analyzes EXIF metadata/raw byte signatures, and provides an AI Visual Deep Scan fallback to help you distinguish between human-made and AI-generated imagery.
 
 </div>
 
@@ -45,8 +45,9 @@ An advanced, production-ready tool designed to verify image authenticity. It sca
 ## 🌟 Key Features
 
 - **SynthID Detection**: Accurately extracts and verifies Google's invisible SynthID watermarks using FFT frequency analysis.
-- **C2PA & EXIF Metadata**: Uncovers hidden metadata strings and content credentials embedded by AI generators (like Midjourney, DALL-E, etc.).
-- **Batch Processing**: Need to scan thousands of images? Upload them via the batch endpoint, and background workers will process them concurrently without blocking the server.
+- **Metadata Forensics**: Uncovers hidden metadata strings embedded by AI generators (like Midjourney, DALL-E, etc.).
+- **Deep Visual Scan**: A fallback multimodal AI analysis that inspects images for visual artifacts (unnatural textures, anatomy errors) when invisible watermarks are destroyed.
+- **Batch Processing**: Upload images via the batch endpoint, and background workers will process them concurrently without blocking the server.
 - **Frequency Spectrum Visualization**: See the actual FFT ring energies in a real-time canvas visualization — understand *why* the detector flagged an image.
 - **Scan History**: Review past scans with filtering, confidence scores, and timestamps.
 - **Stunning Interface**: Features a beautiful, animated dark-mode UI built with Next.js, shadcn/ui, Framer Motion, and Tailwind CSS.
@@ -131,20 +132,23 @@ curl -X POST -F "image=@test-image.jpg" http://localhost:8000/detect
 {
   "is_watermarked": true,
   "confidence": 0.94,
-  "phase_match": 0.87,
-  "multi_scale_consistency": 0.91,
-  "processing_time_ms": 145.23,
-  "spectrum_data": {
-    "ring_energies": [0.12, 0.34, 0.56, ...],
-    "peak_ring": 7,
-    "num_rings": 32
+  "details": {
+    "metadata_signature_found": true
   },
   "exif_data": {
     "Image Software": "Google Imagen"
-  },
-  "details": {}
+  }
 }
 ```
+
+### `POST /deep-scan`
+Upload an image to get a qualitative AI visual assessment (Low/Medium/High likelihood) based on artifacts in the image.
+
+### `POST /detect-batch`
+Submit multiple images for background processing. Returns a `job_id`.
+
+### `GET /detect-batch/{job_id}`
+Poll the status of a background batch job. Returns `processing` or `completed` with the array of results.
 
 ### Batch Image Scan
 

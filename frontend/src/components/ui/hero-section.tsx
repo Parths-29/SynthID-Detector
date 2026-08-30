@@ -112,8 +112,9 @@ export function HeroSection() {
                   </h1>
                   <p className="mx-auto mt-8 max-w-2xl text-balance text-lg">
                     Verify image authenticity by scanning for Google&apos;s SynthID
-                    invisible watermark, EXIF metadata, and C2PA content
-                    credentials — all in one place.
+                    invisible watermark, EXIF metadata, and semantic AI Visual Analysis
+                    to help you distinguish between human-made and AI-generated
+                    imagery.
                   </p>
                 </AnimatedGroup>
 
@@ -203,7 +204,7 @@ export function HeroSection() {
                       <div className="bg-white/5 rounded-xl p-6 border border-white/10 text-center">
                         <Shield className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
                         <div className="text-white/90 font-medium">
-                          EXIF & C2PA
+                          EXIF Metadata
                         </div>
                         <div className="text-white/40 text-sm mt-1">
                           Metadata extraction
@@ -241,7 +242,7 @@ export function HeroSection() {
                       <div className="bg-white rounded-xl p-6 border shadow-sm text-center">
                         <Shield className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
                         <div className="text-zinc-900 font-medium">
-                          EXIF & C2PA
+                          EXIF Metadata
                         </div>
                         <div className="text-zinc-400 text-sm mt-1">
                           Metadata extraction
@@ -395,9 +396,9 @@ export function HeroSection() {
                 <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center mb-6 border border-emerald-500/20 group-hover:scale-110 transition-transform">
                   <Code2 className="w-6 h-6 text-emerald-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-white/90 mb-3">3. Metadata & C2PA Extraction</h3>
-                <p className="text-white/40 text-sm leading-relaxed">
-                  Simultaneously, the detector parses EXIF tags and Content Credentials (C2PA) to find digital signatures from tools like Midjourney, DALL-E, or Photoshop.
+                <h3 className="text-xl font-semibold text-white/90 mb-3">3. Metadata Forensics</h3>
+                <p className="text-white/60 leading-relaxed">
+                  Simultaneously, the detector parses EXIF tags and raw binary signatures to find digital signatures from tools like Midjourney, DALL-E, or Gemini.
                 </p>
               </div>
             </div>
@@ -442,10 +443,10 @@ export function HeroSection() {
 &#123;<br/>
   <span className="text-blue-400">"has_synthid"</span>: <span className="text-amber-400">true</span>,<br/>
   <span className="text-blue-400">"confidence"</span>: <span className="text-fuchsia-400">0.94</span>,<br/>
-  <span className="text-blue-400">"c2pa_data"</span>: &#123;<br/>
-    <span className="text-blue-400">"software"</span>: <span className="text-emerald-400">"Google Imagen"</span>,<br/>
-    <span className="text-blue-400">"ai_generated"</span>: <span className="text-amber-400">true</span><br/>
-  &#125;,<br/>
+  <span className="text-blue-400">"visual_analysis"</span>: &#123;<br/>
+    &nbsp;&nbsp;<span className="text-blue-400">"status"</span>: <span className="text-emerald-400">"completed"</span>,<br/>
+    &nbsp;&nbsp;<span className="text-blue-400">"likelihood"</span>: <span className="text-emerald-400">"High"</span><br/>
+  &#125;<br/>
   <span className="text-blue-400">"processing_time_ms"</span>: <span className="text-fuchsia-400">145</span><br/>
 &#125;
                     </code>

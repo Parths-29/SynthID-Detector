@@ -14,3 +14,4 @@ prometheus-client
 # Testing
 pytest
 httpx
+google-generativeai
