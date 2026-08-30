@@ -11,3 +11,6 @@ exifread
 slowapi
 prometheus-client
 
+# Testing
+pytest
+httpx
