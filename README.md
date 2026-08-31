@@ -59,15 +59,20 @@ An advanced, production-ready full-stack application designed to verify image au
 
 ## 📊 Model Evaluation & Performance
 
-The classifier was fine-tuned on an authentic dataset of **3,000 genuine images** (2,000 training, 1,000 test evaluation samples containing real CIFAR-10 camera photographs vs Stable Diffusion v1.4 synthetic outputs).
+> [!IMPORTANT]
+> **Scope & Benchmark Framing:**
+> - These metrics are measured **specifically on the CIFAKE benchmark pairing** (CIFAR-10 real camera photographs vs. Stable Diffusion v1.4 synthetic outputs).
+> - **Cross-Generator Generalization:** Detectors trained on single generator pairings (such as CIFAR-10 vs. SD v1.4) typically experience significant accuracy drops (often down to 20–30%) when evaluated against unseen, state-of-the-art generators (e.g., Midjourney v7, Flux, Gemini Imagen 3, or Diffusion Transformers).
+> - **Sample Size Note:** Evaluated on a 3,000-image subset (2,000 training, 1,000 evaluation) of the broader 120,000-image CIFAKE dataset.
 
 | Metric | Score |
 |--------|-------|
-| **Accuracy** | **93.4%** |
+| **Benchmark Dataset** | **CIFAKE (CIFAR-10 Photos vs. Stable Diffusion v1.4)** |
+| **Test Accuracy** | **93.4%** |
 | **ROC AUC** | **0.980** |
-| **FAKE Class (Stable Diffusion) Precision / Recall** | **93.2% / 93.6% (F1 = 0.934)** |
+| **FAKE Class (Stable Diffusion v1.4) Precision / Recall** | **93.2% / 93.6% (F1 = 0.934)** |
 | **REAL Class (CIFAR-10 Photos) Precision / Recall** | **93.6% / 93.2% (F1 = 0.934)** |
-| **Test Set Size** | **1,000 authentic evaluation samples** |
+| **Evaluation Test Set Size** | **1,000 authentic evaluation samples** |
 
 ---
 
