@@ -59,15 +59,15 @@ An advanced, production-ready full-stack application designed to verify image au
 
 ## 📊 Model Evaluation & Performance
 
-The classifier was fine-tuned on a balanced dataset of **12,000 images** (10,000 training, 2,000 test evaluation samples) with data augmentations.
+The classifier was fine-tuned on an authentic dataset of **3,000 genuine images** (2,000 training, 1,000 test evaluation samples containing real CIFAR-10 camera photographs vs Stable Diffusion v1.4 synthetic outputs).
 
 | Metric | Score |
 |--------|-------|
-| **Accuracy** | **99.95%** |
-| **ROC AUC** | **1.000** |
-| **FAKE Class Precision / Recall** | **1.000 / 0.999** |
-| **REAL Class Precision / Recall** | **0.999 / 1.000** |
-| **Evaluation Test Set Size** | **2,000 samples** |
+| **Accuracy** | **92.3%** |
+| **ROC AUC** | **0.9745** |
+| **FAKE Class (Stable Diffusion) Precision / Recall** | **90.8% / 94.2% (F1 = 0.924)** |
+| **REAL Class (CIFAR-10 Photos) Precision / Recall** | **94.0% / 90.4% (F1 = 0.921)** |
+| **Test Set Size** | **1,000 authentic evaluation samples** |
 
 ---
 

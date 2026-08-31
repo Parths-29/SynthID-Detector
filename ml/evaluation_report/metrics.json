@@ -1,21 +1,21 @@
 {
-  "accuracy": 0.9995,
-  "roc_auc": 1.0,
+  "accuracy": 0.923,
+  "roc_auc": 0.9745,
   "per_class": {
     "FAKE": {
-      "precision": 1.0,
-      "recall": 0.999,
-      "f1_score": 0.9995,
-      "support": 1000
+      "precision": 0.9075,
+      "recall": 0.942,
+      "f1_score": 0.9244,
+      "support": 500
     },
     "REAL": {
-      "precision": 0.999,
-      "recall": 1.0,
-      "f1_score": 0.9995,
-      "support": 1000
+      "precision": 0.9397,
+      "recall": 0.904,
+      "f1_score": 0.9215,
+      "support": 500
     }
   },
-  "test_samples": 2000,
+  "test_samples": 1000,
   "class_mapping": {
     "FAKE": 0,
     "REAL": 1
