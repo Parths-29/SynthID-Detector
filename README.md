@@ -63,10 +63,10 @@ The classifier was fine-tuned on an authentic dataset of **3,000 genuine images*
 
 | Metric | Score |
 |--------|-------|
-| **Accuracy** | **92.3%** |
-| **ROC AUC** | **0.9745** |
-| **FAKE Class (Stable Diffusion) Precision / Recall** | **90.8% / 94.2% (F1 = 0.924)** |
-| **REAL Class (CIFAR-10 Photos) Precision / Recall** | **94.0% / 90.4% (F1 = 0.921)** |
+| **Accuracy** | **93.4%** |
+| **ROC AUC** | **0.980** |
+| **FAKE Class (Stable Diffusion) Precision / Recall** | **93.2% / 93.6% (F1 = 0.934)** |
+| **REAL Class (CIFAR-10 Photos) Precision / Recall** | **93.6% / 93.2% (F1 = 0.934)** |
 | **Test Set Size** | **1,000 authentic evaluation samples** |
 
 ---

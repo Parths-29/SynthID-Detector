@@ -1,17 +1,17 @@
 {
-  "accuracy": 0.923,
-  "roc_auc": 0.9745,
+  "accuracy": 0.934,
+  "roc_auc": 0.9805,
   "per_class": {
     "FAKE": {
-      "precision": 0.9075,
-      "recall": 0.942,
-      "f1_score": 0.9244,
+      "precision": 0.9323,
+      "recall": 0.936,
+      "f1_score": 0.9341,
       "support": 500
     },
     "REAL": {
-      "precision": 0.9397,
-      "recall": 0.904,
-      "f1_score": 0.9215,
+      "precision": 0.9357,
+      "recall": 0.932,
+      "f1_score": 0.9339,
       "support": 500
     }
   },

@@ -8,9 +8,9 @@ Class mapping: {'FAKE': 0, 'REAL': 1}
 
               precision    recall  f1-score   support
 
-        FAKE       0.91      0.94      0.92       500
-        REAL       0.94      0.90      0.92       500
+        FAKE       0.93      0.94      0.93       500
+        REAL       0.94      0.93      0.93       500
 
-    accuracy                           0.92      1000
-   macro avg       0.92      0.92      0.92      1000
-weighted avg       0.92      0.92      0.92      1000
+    accuracy                           0.93      1000
+   macro avg       0.93      0.93      0.93      1000
+weighted avg       0.93      0.93      0.93      1000
