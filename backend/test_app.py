@@ -163,3 +163,51 @@ class TestCORS:
         )
         # FastAPI CORS middleware should respond
         assert response.status_code in (200, 204, 405)
+
+
+# ── Classify endpoint ─────────────────────────────────────────────────────
+
+class TestClassifyEndpoint:
+    def test_classify_returns_valid_shape(self):
+        """Classify should return model_status, probability, heatmap keys."""
+        img_bytes = _make_test_image()
+        response = client.post(
+            "/classify",
+            files={"image": ("test.jpg", io.BytesIO(img_bytes), "image/jpeg")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "model_status" in data
+        assert data["model_status"] in ("not_trained", "ready", "error")
+        assert "probability" in data
+        assert "heatmap" in data
+
+    def test_classify_rejects_non_image(self):
+        response = client.post(
+            "/classify",
+            files={"image": ("test.txt", io.BytesIO(b"hello"), "text/plain")},
+        )
+        assert response.status_code == 400
+        assert "not an image" in response.json()["detail"]
+
+    def test_classify_with_png(self):
+        img_bytes = _make_test_image(fmt=".png")
+        response = client.post(
+            "/classify",
+            files={"image": ("test.png", io.BytesIO(img_bytes), "image/png")},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "model_status" in data
+
+    def test_classify_probability_range(self):
+        """If model is ready, probability should be between 0 and 1."""
+        img_bytes = _make_test_image()
+        response = client.post(
+            "/classify",
+            files={"image": ("test.jpg", io.BytesIO(img_bytes), "image/jpeg")},
+        )
+        data = response.json()
+        if data["model_status"] == "ready":
+            assert 0.0 <= data["probability"] <= 1.0
+

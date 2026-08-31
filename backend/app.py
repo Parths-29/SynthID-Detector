@@ -168,12 +168,15 @@ def _cleanup_expired_jobs():
 
 def _extract_exif(contents: bytes) -> dict:
     """Extract EXIF metadata from raw image bytes."""
-    tags = exifread.process_file(io.BytesIO(contents))
-    return {
-        k: str(v)
-        for k, v in tags.items()
-        if k not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote')
-    }
+    try:
+        tags = exifread.process_file(io.BytesIO(contents))
+        return {
+            k: str(v)
+            for k, v in tags.items()
+            if k not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename', 'EXIF MakerNote')
+        }
+    except Exception:
+        return {}
 
 
 # ── Single image detection ─────────────────────────────────────────────────
@@ -250,6 +253,8 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
         _detection_cache[file_hash] = response
         return response
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
