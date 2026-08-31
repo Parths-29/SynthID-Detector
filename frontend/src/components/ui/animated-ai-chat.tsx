@@ -1163,7 +1163,8 @@ function DetectionAssistant({
     setIsLoading(true);
 
     try {
-      const response = await axios.post("http://localhost:8000/ask-assistant", {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const response = await axios.post(`${apiBase}/ask-assistant`, {
         message: userMsg,
         detection_context: result,
         deep_scan_context: deepScanResult,
