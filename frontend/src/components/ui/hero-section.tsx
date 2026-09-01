@@ -3,7 +3,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, ChevronRight, Menu, X, Shield, Zap, BarChart3, Sparkles, Terminal, Code2, Database } from "lucide-react";
+import { ArrowRight, ChevronRight, Menu, X, Shield, Zap, BarChart3, Sparkles, Terminal, Code2, Database, Cpu, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatedGroup } from "@/components/ui/animated-group";
 import { cn } from "@/lib/utils";
@@ -107,7 +107,7 @@ export function HeroSection() {
                   </Link>
 
                   <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] flex items-center justify-center">
-                    <Sparkles className="w-12 h-12 md:w-16 md:h-16 text-violet-500 mr-4 shrink-0" />
+                    <Cpu className="w-12 h-12 md:w-16 md:h-16 text-violet-500 mr-4 shrink-0" />
                     <span>Detect AI Watermarks in Seconds</span>
                   </h1>
                   <p className="mx-auto mt-8 max-w-2xl text-balance text-lg">
@@ -406,7 +406,7 @@ export function HeroSection() {
         </section>
 
         {/* API Docs Section */}
-        <section className="py-24 relative overflow-hidden bg-zinc-950 border-t border-white/[0.05]">
+        <section className="py-24 relative overflow-hidden bg-black border-t border-white/[0.05]">
           <div className="mx-auto max-w-7xl px-6 relative z-10 flex flex-col md:flex-row items-center gap-12">
             <div className="flex-1 space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium">

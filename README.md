@@ -31,7 +31,7 @@ An advanced, production-ready full-stack application designed to verify image au
 │                     Backend API (FastAPI)                        │
 │   /detect · /classify · /deep-scan · /ask-assistant · /metrics   │
 │   Dynamic Rate Limiting (SlowAPI) · CORS · Quota Isolation       │
-│          localhost:8000   (Python 3.9+ / Starlette)              │
+│          vercel - host   (Python 3.9+ / Starlette)              │
 └────────┬───────────────────────┬────────────────────────┬────────┘
          │                       │                        │
 ┌────────▼────────┐     ┌────────▼────────┐      ┌────────▼────────┐
@@ -73,6 +73,26 @@ An advanced, production-ready full-stack application designed to verify image au
 | **FAKE Class (Stable Diffusion v1.4) Precision / Recall** | **93.2% / 93.6% (F1 = 0.934)** |
 | **REAL Class (CIFAR-10 Photos) Precision / Recall** | **93.6% / 93.2% (F1 = 0.934)** |
 | **Evaluation Test Set Size** | **1,000 authentic evaluation samples** |
+
+---
+
+## 🛡️ Out-of-Distribution (OOD) Detection
+
+The model features an OOD layer utilizing **Mahalanobis Distance** measured on the 2048-dimensional feature vectors of the ResNet50 penultimate layer. 
+- Distances exceeding the 95th percentile of the validation set trigger an **"Outside trained scope — unverified"** warning.
+- This ensures honest reporting when evaluating generators the model hasn't seen during training (like Midjourney or Flux).
+
+---
+
+## 🧩 Browser Extension (Phase 4)
+
+The project includes a Manifest V3 Chrome extension (in the `extension/` directory) for rapid image analysis directly from the browser.
+
+> [!CAUTION]
+> ### Important Privacy & Usage Caveats:
+> - **Opt-in Scanning Only**: The extension does **not** passively monitor your web traffic or automatically scan images on pages you visit. 
+> - **Right-Click Activation**: You must explicitly right-click an image and select "Scan for AI Generation" to trigger an analysis.
+> - **Local Network**: The extension sends the selected image strictly to your locally running backend API (`http://localhost:8000/quick-scan`). No images are sent to any external servers (unless you use the Deep Scan feature which queries Gemini, triggered manually from the UI).
 
 ---
 

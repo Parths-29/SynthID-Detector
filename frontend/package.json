@@ -9,6 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@react-spring/web": "^10.1.2",
+    "@visx/gradient": "^4.0.0",
+    "@visx/group": "^4.0.0",
+    "@visx/mock-data": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/shape": "^4.0.0",
     "axios": "^1.20.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

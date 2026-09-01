@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "SynthID AI Image Detector",
+  "version": "1.0",
+  "description": "Scan images for AI signatures and invisible watermarks (opt-in via right-click).",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "SynthID Detector"
+  }
+}

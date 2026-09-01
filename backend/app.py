@@ -259,6 +259,65 @@ async def detect_watermark(request: Request, image: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Quick Scan (For Browser Extension) ─────────────────────────────────────
+
+@app.post("/quick-scan")
+@limiter.limit("30/minute")
+async def quick_scan(request: Request, image: UploadFile = File(...)):
+    """
+    Fast, lightweight analysis for the browser extension.
+    Runs robust watermark extraction and PyTorch classification, but NO Gemini analysis.
+    """
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File provided is not an image.")
+
+    REQUEST_COUNT.inc()
+    start_time = time.time()
+    try:
+        contents = await image.read()
+        file_hash = hashlib.sha256(contents).hexdigest()
+        
+        # 1. Classification (PyTorch)
+        classifier_result = classifier_instance.run_inference(contents)
+        
+        # 2. Watermark Extraction
+        nparr = np.frombuffer(contents, np.uint8)
+        img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if img_cv is None:
+            raise HTTPException(status_code=400, detail="Could not decode image.")
+
+        img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+
+        with PROCESSING_TIME.time():
+            watermark_result = extractor.detect_from_v4_codebook(
+                img_rgb,
+                codebook,
+                model=None
+            )
+
+        if watermark_result.is_watermarked:
+            DETECTED_COUNT.inc()
+
+        processing_time_ms = round((time.time() - start_time) * 1000, 2)
+
+        response = {
+            "is_watermarked": watermark_result.is_watermarked,
+            "watermark_confidence": watermark_result.confidence,
+            "classifier_probability": classifier_result.get("probability"),
+            "ood_status": classifier_result.get("ood_status"),
+            "model_status": classifier_result.get("model_status"),
+            "processing_time_ms": processing_time_ms
+        }
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Batch image detection ──────────────────────────────────────────────────
 
 @app.post("/detect-batch")
@@ -332,7 +391,7 @@ async def ask_assistant(request: Request, chat_req: ChatRequest):
             
         # Using google-genai
         response = await chat_client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.5-flash',
             contents=prompt
         )
         return {"response": response.text}
@@ -381,7 +440,7 @@ async def deep_scan(request: Request, image: UploadFile = File(...)):
         
         # Using google-genai
         response = await deep_scan_client.aio.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-3.5-flash',
             contents=[prompt, pil_image]
         )
         text = response.text

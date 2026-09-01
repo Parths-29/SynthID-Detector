@@ -26,6 +26,7 @@ frontend/out/
 artifacts/*.npz
 artifacts/*.pkl
 ml/cifake_dataset/
+cifar10_test/
 ml/weights/*.pt
 ml/weights/*.pth
 !.gitkeep

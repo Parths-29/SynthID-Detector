@@ -116,6 +116,10 @@ class ClassifierModel:
         self.is_trained = False
         self.fake_class_idx = 0  # Default: FAKE=0 (alphabetical in ImageFolder)
         
+        self.ood_means = None
+        self.ood_inv_covs = None
+        self.ood_threshold = 2332.5775
+        
         self._load_config()
         self._load_models()
     
@@ -165,6 +169,18 @@ class ClassifierModel:
         
         if not self.is_trained:
             print("No trained classifier found. Running in dev-preview mode.")
+            
+        # Load OOD stats
+        ood_stats_path = os.path.join(WEIGHTS_DIR, "ood_stats.npz")
+        if os.path.exists(ood_stats_path):
+            try:
+                data = np.load(ood_stats_path)
+                self.ood_means = data['means']
+                covs = data['covs']
+                self.ood_inv_covs = np.array([np.linalg.pinv(c, rcond=1e-5) for c in covs])
+                print(f"Loaded OOD stats from {ood_stats_path}")
+            except Exception as e:
+                print(f"Failed to load OOD stats: {e}")
     
     def run_inference(self, image_bytes: bytes) -> dict:
         """
@@ -182,6 +198,8 @@ class ClassifierModel:
                 "probability": None,
                 "heatmap": None,
                 "heatmap_text": None,
+                "ood_status": None,
+                "ood_distance": None,
             }
         
         try:
@@ -191,6 +209,9 @@ class ClassifierModel:
             
             # ── Get probability (from JIT model, fast) ──
             prob = self._get_probability(input_tensor)
+            
+            # ── Get OOD Status ──
+            ood_distance, ood_status = self._compute_ood(input_tensor)
             
             # ── Generate real Grad-CAM heatmap (from state_dict model) ──
             heatmap_b64 = None
@@ -215,6 +236,8 @@ class ClassifierModel:
                 "probability": float(prob),
                 "heatmap": f"data:image/png;base64,{heatmap_b64}" if heatmap_b64 else None,
                 "heatmap_text": heatmap_text,
+                "ood_status": ood_status,
+                "ood_distance": float(ood_distance) if ood_distance is not None else None,
             }
             
         except Exception as e:
@@ -224,6 +247,8 @@ class ClassifierModel:
                 "probability": None,
                 "heatmap": None,
                 "heatmap_text": None,
+                "ood_status": None,
+                "ood_distance": None,
             }
     
     def _get_probability(self, input_tensor: torch.Tensor) -> float:
@@ -236,6 +261,41 @@ class ClassifierModel:
             fake_prob = probs[0, self.fake_class_idx].item()
         
         return fake_prob
+        
+    def _compute_ood(self, input_tensor: torch.Tensor):
+        """Compute OOD Mahalanobis distance and status."""
+        if self.ood_means is None or self.ood_inv_covs is None or self.gradcam_model is None:
+            return None, None
+            
+        # We need the 2048-dim features. For ResNet50, it's the output before FC.
+        # We can extract it by passing through gradcam_model without the FC layer.
+        with torch.no_grad():
+            # gradcam_model is a ResNet50
+            x = input_tensor
+            x = self.gradcam_model.conv1(x)
+            x = self.gradcam_model.bn1(x)
+            x = self.gradcam_model.relu(x)
+            x = self.gradcam_model.maxpool(x)
+            
+            x = self.gradcam_model.layer1(x)
+            x = self.gradcam_model.layer2(x)
+            x = self.gradcam_model.layer3(x)
+            x = self.gradcam_model.layer4(x)
+            
+            x = self.gradcam_model.avgpool(x)
+            feat = torch.flatten(x, 1)
+            
+            feat_np = feat[0].cpu().numpy().astype(np.float64)
+            
+        min_dist = float('inf')
+        for c in range(len(self.ood_means)):
+            diff = feat_np - self.ood_means[c]
+            dist = diff.T @ self.ood_inv_covs[c] @ diff
+            if dist < min_dist:
+                min_dist = dist
+                
+        status = "in_distribution" if min_dist <= self.ood_threshold else "out_of_distribution"
+        return min_dist, status
     
     def _overlay_heatmap(self, np_img: np.ndarray, cam: np.ndarray) -> str:
         """Create a JET-colored heatmap overlay and return base64 PNG."""

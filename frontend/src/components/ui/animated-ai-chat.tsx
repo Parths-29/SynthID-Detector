@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Clock,
   Upload,
+  Cpu,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
@@ -25,6 +26,7 @@ import axios from "axios";
 import Link from "next/link";
 import { ConfidenceGauge } from "@/components/ui/confidence-gauge";
 import { FrequencySpectrum } from "@/components/ui/frequency-spectrum";
+import { PieChart } from "@/components/ui/pie-chart";
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
@@ -545,7 +547,7 @@ export function AnimatedAIChat() {
       </div>
 
       {/* Top nav */}
-      <div className="absolute top-6 left-6 md:top-8 md:left-8 z-50 flex items-center gap-4">
+      <div className="fixed top-4 left-4 md:top-6 md:left-6 z-50 flex flex-col md:flex-row items-start md:items-center gap-4 bg-black/50 backdrop-blur-md p-2 rounded-xl border border-white/10">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm"
@@ -577,7 +579,8 @@ export function AnimatedAIChat() {
               transition={{ delay: 0.2, duration: 0.5 }}
               className="inline-block"
             >
-              <h1 className="text-4xl md:text-5xl font-semibold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60 pb-2">
+              <h1 className="text-4xl md:text-5xl font-semibold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60 pb-2 flex items-center justify-center gap-4">
+                <Cpu className="w-10 h-10 md:w-12 md:h-12 text-violet-500 shrink-0" />
                 Upload an image to verify
               </h1>
               <motion.div
@@ -726,24 +729,10 @@ export function AnimatedAIChat() {
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   whileTap={{ scale: 0.94 }}
-                  className="p-2 text-white/40 hover:text-white/90 rounded-lg transition-colors relative group"
+                  className="px-4 py-2 bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/30 text-violet-300 rounded-lg transition-colors flex items-center gap-2"
                 >
-                  <Paperclip className="w-4 h-4" />
-                </motion.button>
-                <motion.button
-                  type="button"
-                  data-command-button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowCommandPalette((prev) => !prev);
-                  }}
-                  whileTap={{ scale: 0.94 }}
-                  className={cn(
-                    "p-2 text-white/40 hover:text-white/90 rounded-lg transition-colors relative group",
-                    showCommandPalette && "bg-white/10 text-white/90"
-                  )}
-                >
-                  <Command className="w-4 h-4" />
+                  <Upload className="w-4 h-4" />
+                  <span className="text-sm font-medium">Upload Image</span>
                 </motion.button>
               </div>
 
@@ -860,14 +849,26 @@ export function AnimatedAIChat() {
                             <div className="flex gap-4">
                               <div className="flex-1">
                                 <div className="text-xs text-white/50 mb-1">AI Probability Score</div>
-                                <div className="text-2xl font-mono text-white/90">
-                                  {(classifyResults[result.filename].probability * 100).toFixed(1)}%
-                                </div>
-                                <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden mt-2">
-                                  <div
-                                    className="h-full rounded-full bg-violet-500"
-                                    style={{ width: `${classifyResults[result.filename].probability * 100}%` }}
-                                  />
+                                <div className="flex flex-col md:flex-row items-center gap-6 mt-2">
+                                  <div className="shrink-0 w-[140px] h-[140px] flex items-center justify-center bg-black/20 rounded-full shadow-inner shadow-black/50 border border-white/5 relative">
+                                    <div className="absolute inset-0 z-10">
+                                      <PieChart 
+                                        width={140} 
+                                        height={140} 
+                                        aiProbability={classifyResults[result.filename].probability} 
+                                        animate={true}
+                                        margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col justify-center space-y-2">
+                                    {classifyResults[result.filename].ood_status === "out_of_distribution" && (
+                                      <div className="text-xs font-medium text-orange-400 bg-orange-400/10 px-3 py-2 rounded-md inline-block border border-orange-400/20 max-w-[200px]">
+                                        <AlertTriangle className="w-4 h-4 inline-block mr-1 mb-0.5" />
+                                        Outside trained scope — accuracy unverified
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                               {classifyResults[result.filename].heatmap && (
