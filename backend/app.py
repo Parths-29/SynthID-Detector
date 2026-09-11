@@ -150,8 +150,28 @@ batch_jobs: dict = {}
 _batch_lock = threading.Lock()
 
 # ── SHA-256 Cache ───────────────────────────────────────────────────────────
+import json
+
+CACHE_FILE = os.path.join(os.path.dirname(__file__), '..', 'artifacts', 'cache.json')
+
+def _load_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading cache: {e}")
+    return {}
+
+def _save_cache():
+    try:
+        with open(CACHE_FILE, 'w') as f:
+            json.dump(_deep_scan_cache, f)
+    except Exception as e:
+        print(f"Error saving cache: {e}")
+
 _detection_cache = {}
-_deep_scan_cache = {}
+_deep_scan_cache = _load_cache()
 
 
 def _cleanup_expired_jobs():
@@ -458,6 +478,7 @@ async def deep_scan(request: Request, image: UploadFile = File(...)):
             "reasoning": reasoning
         }
         _deep_scan_cache[file_hash] = result
+        _save_cache()
         return result
     except Exception as e:
         error_msg = str(e)

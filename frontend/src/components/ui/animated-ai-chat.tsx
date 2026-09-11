@@ -209,7 +209,19 @@ export function AnimatedAIChat() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [isColdStart, setIsColdStart] = useState(false);
   const [activeSuggestion, setActiveSuggestion] = useState<number>(-1);
+
+  // Cold start timer
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (isTyping) {
+      timeout = setTimeout(() => setIsColdStart(true), 3000);
+    } else {
+      setIsColdStart(false);
+    }
+    return () => clearTimeout(timeout);
+  }, [isTyping]);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [results, setResults] = useState<DetectionResult[]>([]);
@@ -1082,7 +1094,7 @@ export function AnimatedAIChat() {
                 <Sparkles className="w-4 h-4 text-violet-400" />
               </div>
               <div className="flex items-center gap-2 text-sm text-white/70">
-                <span>Analyzing</span>
+                <span>{isColdStart ? "Waking up AI models (this may take a few extra seconds)" : "Analyzing"}</span>
                 <TypingDots />
               </div>
             </div>
