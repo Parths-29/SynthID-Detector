@@ -56,26 +56,56 @@ from robust_extractor import RobustSynthIDExtractor
 from synthid_bypass_v4 import SpectralCodebookV4
 
 # ---------------------------------------------------------------------------
-# MongoDB placeholder — uncomment and configure when ready
+# MongoDB & JWT Auth Configuration
 # ---------------------------------------------------------------------------
-# from motor.motor_asyncio import AsyncIOMotorClient
-#
-# MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-# MONGO_DB  = os.getenv("MONGO_DB", "synthid_detector")
-#
-# mongo_client: Optional[AsyncIOMotorClient] = None
-# db = None
-#
-# @app.on_event("startup")
-# async def startup_db():
-#     global mongo_client, db
-#     mongo_client = AsyncIOMotorClient(MONGO_URI)
-#     db = mongo_client[MONGO_DB]
-#
-# @app.on_event("shutdown")
-# async def shutdown_db():
-#     if mongo_client:
-#         mongo_client.close()
+from motor.motor_asyncio import AsyncIOMotorClient
+from passlib.context import CryptContext
+import jwt
+from datetime import datetime, timedelta
+
+MONGO_URI = os.getenv("MONGO_URI") or os.getenv("MONGO_URL") or os.getenv("MONGODB_URL") or "mongodb://localhost:27017"
+MONGO_DB  = os.getenv("MONGO_DB", "synthid_detector")
+JWT_SECRET = os.getenv("JWT_SECRET", "synthid_super_secret_key_2026")
+JWT_ALGORITHM = "HS256"
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+mongo_client: Optional[AsyncIOMotorClient] = None
+db = None
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(days=7))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: Optional[str] = "Researcher"
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class UserOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    created_at: str
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
 # ---------------------------------------------------------------------------
 
 # ── App & middleware ────────────────────────────────────────────────────────
@@ -124,12 +154,167 @@ def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+# ── Database Lifecycle Events ────────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup_db():
+    global mongo_client, db
+    try:
+        mongo_client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=3000)
+        db = mongo_client[MONGO_DB]
+        # Test connection ping
+        await mongo_client.admin.command('ping')
+        print(f"✓ Connected to MongoDB cluster: {MONGO_DB}")
+    except Exception as e:
+        print(f"Notice: MongoDB cluster connection ping skipped or offline ({e}). Auth & logging will fallback gracefully.")
+
+@app.on_event("shutdown")
+async def shutdown_db():
+    if mongo_client:
+        mongo_client.close()
+
 # ── Health endpoint ─────────────────────────────────────────────────────────
 
 @app.get("/health")
-def health():
+async def health():
     """Health check for Docker / Kubernetes readiness probes."""
-    return {"status": "ok", "version": "2.0.0"}
+    mongo_status = "disconnected"
+    if mongo_client:
+        try:
+            await mongo_client.admin.command('ping')
+            mongo_status = "connected"
+        except Exception:
+            mongo_status = "error"
+
+    return {
+        "status": "ok",
+        "version": "2.0.0",
+        "mongodb": mongo_status,
+        "database": MONGO_DB
+    }
+
+# ── Auth Endpoints ─────────────────────────────────────────────────────────
+
+@app.post("/auth/signup", response_model=AuthResponse)
+async def signup(req: SignupRequest):
+    if not req.email or not req.password or not req.name:
+        raise HTTPException(status_code=400, detail="Name, email, and password are required")
+
+    email_clean = req.email.strip().lower()
+
+    if db is not None:
+        try:
+            existing = await db.users.find_one({"email": email_clean})
+            if existing:
+                raise HTTPException(status_code=400, detail="An account with this email already exists.")
+            
+            user_doc = {
+                "user_id": str(uuid.uuid4()),
+                "name": req.name.strip(),
+                "email": email_clean,
+                "password_hash": hash_password(req.password),
+                "role": req.role or "Researcher",
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await db.users.insert_one(user_doc)
+            user_out = UserOut(
+                id=user_doc["user_id"],
+                name=user_doc["name"],
+                email=user_doc["email"],
+                role=user_doc["role"],
+                created_at=user_doc["created_at"]
+            )
+            token = create_access_token({"sub": user_doc["user_id"], "email": user_doc["email"]})
+            return AuthResponse(access_token=token, user=user_out)
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"MongoDB signup fallback notice: {e}")
+
+    # Fallback in-memory or demo user response if DB offline
+    demo_user = UserOut(
+        id=str(uuid.uuid4()),
+        name=req.name.strip(),
+        email=email_clean,
+        role=req.role or "Researcher",
+        created_at=datetime.utcnow().isoformat()
+    )
+    token = create_access_token({"sub": demo_user.id, "email": demo_user.email})
+    return AuthResponse(access_token=token, user=demo_user)
+
+@app.post("/auth/login", response_model=AuthResponse)
+async def login(req: LoginRequest):
+    if not req.email or not req.password:
+        raise HTTPException(status_code=400, detail="Email and password are required")
+
+    email_clean = req.email.strip().lower()
+
+    if db is not None:
+        try:
+            user_doc = await db.users.find_one({"email": email_clean})
+            if user_doc and verify_password(req.password, user_doc["password_hash"]):
+                user_out = UserOut(
+                    id=user_doc["user_id"],
+                    name=user_doc["name"],
+                    email=user_doc["email"],
+                    role=user_doc.get("role", "Researcher"),
+                    created_at=user_doc.get("created_at", datetime.utcnow().isoformat())
+                )
+                token = create_access_token({"sub": user_doc["user_id"], "email": user_doc["email"]})
+                return AuthResponse(access_token=token, user=user_out)
+            elif user_doc:
+                raise HTTPException(status_code=401, detail="Invalid email or password.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"MongoDB login fallback notice: {e}")
+
+    # Demo fallback validation for testing
+    if req.password.strip():
+        demo_user = UserOut(
+            id="demo-user-123",
+            name="Research User",
+            email=email_clean,
+            role="Researcher",
+            created_at=datetime.utcnow().isoformat()
+        )
+        token = create_access_token({"sub": demo_user.id, "email": demo_user.email})
+        return AuthResponse(access_token=token, user=demo_user)
+
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+@app.get("/auth/me", response_model=UserOut)
+async def get_current_user(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication token required")
+    
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        user_id = payload.get("sub")
+        email = payload.get("email")
+
+        if db is not None:
+            user_doc = await db.users.find_one({"user_id": user_id})
+            if user_doc:
+                return UserOut(
+                    id=user_doc["user_id"],
+                    name=user_doc["name"],
+                    email=user_doc["email"],
+                    role=user_doc.get("role", "Researcher"),
+                    created_at=user_doc.get("created_at", datetime.utcnow().isoformat())
+                )
+
+        return UserOut(
+            id=user_id or "demo-user-123",
+            name="Research User",
+            email=email or "user@example.com",
+            role="Researcher",
+            created_at=datetime.utcnow().isoformat()
+        )
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
 
 
 # ── Load ML models on startup ──────────────────────────────────────────────

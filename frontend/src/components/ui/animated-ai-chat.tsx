@@ -20,7 +20,8 @@ import {
   Upload,
   Cpu,
   Maximize2,
-  X
+  X,
+  User
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
@@ -29,6 +30,7 @@ import Link from "next/link";
 import { ConfidenceGauge } from "@/components/ui/confidence-gauge";
 import { FrequencySpectrum } from "@/components/ui/frequency-spectrum";
 import { PieChart } from "@/components/ui/pie-chart";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
@@ -568,21 +570,34 @@ export function AnimatedAIChat() {
       </div>
 
       {/* Top nav */}
-      <div className="fixed top-4 left-4 md:top-6 md:left-6 z-50 flex flex-col md:flex-row items-start md:items-center gap-4 bg-black/50 backdrop-blur-md p-2 rounded-xl border border-white/10">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Home</span>
-        </Link>
-        <Link
-          href="/history"
-          className="inline-flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm"
-        >
-          <Clock className="w-4 h-4" />
-          <span>History</span>
-        </Link>
+      <div className="fixed top-4 left-4 right-4 md:top-6 md:left-6 md:right-6 z-50 flex items-center justify-between pointer-events-none">
+        <div className="flex items-center gap-3 bg-black/60 dark:bg-black/80 backdrop-blur-xl p-2 rounded-xl border border-white/10 shadow-2xl pointer-events-auto">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-white/70 hover:text-white transition-colors text-xs px-2.5 py-1.5 rounded-lg hover:bg-white/10 font-medium"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Home</span>
+          </Link>
+          <Link
+            href="/history"
+            className="inline-flex items-center gap-2 text-white/70 hover:text-white transition-colors text-xs px-2.5 py-1.5 rounded-lg hover:bg-white/10 font-medium"
+          >
+            <Clock className="w-4 h-4" />
+            <span>History</span>
+          </Link>
+        </div>
+
+        <div className="flex items-center gap-3 bg-black/60 dark:bg-black/80 backdrop-blur-xl p-1.5 rounded-xl border border-white/10 shadow-2xl pointer-events-auto">
+          <ThemeToggle showLabel={true} />
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-500 hover:to-indigo-500 transition-all shadow-md shadow-violet-600/30"
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>Login</span>
+          </Link>
+        </div>
       </div>
 
       <div className="w-full max-w-2xl mx-auto relative mt-12 md:mt-0">

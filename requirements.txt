@@ -11,6 +11,14 @@ exifread
 slowapi
 prometheus-client
 
+# Database & Auth
+motor
+pymongo
+dnspython
+passlib[bcrypt]
+pyjwt
+python-dotenv
+
 # Testing
 pytest
 httpx
@@ -19,3 +27,4 @@ google-genai
 # ML Inference
 torch
 torchvision
+

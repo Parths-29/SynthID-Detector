@@ -6,7 +6,7 @@ const DemoPieChart = () => {
 
   return (
     <div className="flex w-full h-screen justify-center items-center bg-gray-100">
-      <PieChart width={width} height={height} animate={true} />
+      <PieChart width={width} height={height} animate={true} aiProbability={65} />
     </div>
   );
 };

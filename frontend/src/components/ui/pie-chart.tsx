@@ -1,10 +1,19 @@
 import React from 'react';
-import { Pie, ProvidedProps, PieArcDatum } from '@visx/shape';
+import { Pie } from '@visx/shape';
 import { scaleOrdinal } from '@visx/scale';
 import { Group } from '@visx/group';
 import { GradientPinkBlue } from '@visx/gradient';
 import { animated, useTransition, interpolate } from '@react-spring/web';
 import { Sparkles } from 'lucide-react';
+
+interface PieArcDatum<Datum> {
+  data: Datum;
+  value: number;
+  index: number;
+  startAngle: number;
+  endAngle: number;
+  padAngle: number;
+}
 
 interface ProbabilityData {
   label: string;
@@ -106,7 +115,9 @@ const enterUpdateTransition = ({ startAngle, endAngle }: PieArcDatum<any>) => ({
   opacity: 1,
 });
 
-type AnimatedPieProps<Datum> = ProvidedProps<Datum> & {
+type AnimatedPieProps<Datum> = {
+  arcs: PieArcDatum<Datum>[];
+  path: (arc: PieArcDatum<Datum>) => string | null;
   animate?: boolean;
   getKey: (d: PieArcDatum<Datum>) => string;
   getColor: (d: PieArcDatum<Datum>) => string;

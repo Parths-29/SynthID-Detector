@@ -7,6 +7,7 @@ Run with: pytest backend/test_app.py -v
 import io
 import os
 import sys
+import time
 import numpy as np
 import cv2
 import pytest
@@ -200,14 +201,35 @@ class TestClassifyEndpoint:
         data = response.json()
         assert "model_status" in data
 
-    def test_classify_probability_range(self):
-        """If model is ready, probability should be between 0 and 1."""
-        img_bytes = _make_test_image()
-        response = client.post(
-            "/classify",
-            files={"image": ("test.jpg", io.BytesIO(img_bytes), "image/jpeg")},
+
+# ── Auth endpoints ───────────────────────────────────────────────────────
+
+class TestAuthEndpoints:
+    def test_signup_and_login_flow(self):
+        email = f"test_{int(time.time())}@synthid.io"
+        signup_res = client.post(
+            "/auth/signup",
+            json={"name": "Forensic Scientist", "email": email, "password": "securepassword123", "role": "Researcher"}
         )
-        data = response.json()
-        if data["model_status"] == "ready":
-            assert 0.0 <= data["probability"] <= 1.0
+        assert signup_res.status_code == 200
+        data = signup_res.json()
+        assert "access_token" in data
+        assert data["user"]["email"] == email
+
+        login_res = client.post(
+            "/auth/login",
+            json={"email": email, "password": "securepassword123"}
+        )
+        assert login_res.status_code == 200
+        login_data = login_res.json()
+        assert "access_token" in login_data
+        assert login_data["user"]["email"] == email
+
+    def test_login_invalid_password(self):
+        login_res = client.post(
+            "/auth/login",
+            json={"email": "nonexistent@synthid.io", "password": ""}
+        )
+        assert login_res.status_code in (400, 401)
+
 

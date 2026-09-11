@@ -1,63 +1,59 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
+"use client";
 
-const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
+import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
+import type { ReactNode } from "react";
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
-  asChild?: boolean
+export interface ButtonProps {
+  children: ReactNode;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  variant?: "primary" | "secondary" | "ghost" | "outline";
+  size?: "sm" | "md" | "lg";
+  asChild?: boolean;
+  loading?: boolean;
+  disabled?: boolean;
+  className?: string;
+  id?: string;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    if (asChild) {
-      // When asChild, render the child element directly with button styles
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const child = React.Children.only(props.children) as React.ReactElement<any>;
-      return React.cloneElement(child, {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        className: cn(buttonVariants({ variant, size, className }), (child.props as any).className),
-        ref,
-      });
-    }
-    return (
-      <button
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
-    )
-  }
-)
-Button.displayName = "Button"
-
-export { Button, buttonVariants }
+export function Button({
+  children,
+  onClick,
+  type = "button",
+  variant = "primary",
+  size = "md",
+  asChild = false,
+  loading = false,
+  disabled = false,
+  className,
+  id,
+}: ButtonProps) {
+  return (
+    <button
+      id={id}
+      type={type}
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-200",
+        size === "sm" ? "px-3 py-1.5 text-xs min-h-[36px]" : size === "lg" ? "px-6 py-4 text-lg min-h-[56px]" : "px-6 py-3.5 text-base min-h-[52px]",
+        "min-w-[100px]",
+        "active:scale-[0.98]",
+        "disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100",
+        variant === "primary" &&
+          "bg-gradient-to-r from-black via-zinc-900 to-zinc-800 dark:from-white dark:via-zinc-100 dark:to-zinc-300 text-white dark:text-zinc-950 shadow-lg shadow-black/40 border border-zinc-800 dark:border-zinc-200 hover:shadow-xl hover:from-zinc-900 hover:to-black dark:hover:from-zinc-100 dark:hover:to-white",
+        variant === "secondary" &&
+          "bg-white dark:bg-zinc-900 border-2 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700",
+        variant === "outline" &&
+          "bg-transparent border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800",
+        variant === "ghost" &&
+          "bg-transparent text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800",
+        className
+      )}
+    >
+      {loading && <Loader2 size={20} className="animate-spin" />}
+      {children}
+    </button>
+  );
+}

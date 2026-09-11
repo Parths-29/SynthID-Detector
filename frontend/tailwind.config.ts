@@ -41,6 +41,19 @@ const config: Config = {
         md: "calc(0.5rem - 2px)",
         sm: "calc(0.5rem - 4px)",
       },
+      keyframes: {
+        aurora: {
+          from: {
+            backgroundPosition: "50% 50%, 50% 50%",
+          },
+          to: {
+            backgroundPosition: "350% 50%, 350% 50%",
+          },
+        },
+      },
+      animation: {
+        aurora: "aurora 60s linear infinite",
+      },
     },
   },
   plugins: [],
