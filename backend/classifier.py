@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms, models
-from PIL import Image
+from PIL import Image, ImageChops, ImageEnhance
 import io
 import json
 
@@ -198,6 +198,7 @@ class ClassifierModel:
                 "probability": None,
                 "heatmap": None,
                 "heatmap_text": None,
+                "ela_map": None,
                 "ood_status": None,
                 "ood_distance": None,
             }
@@ -231,11 +232,16 @@ class ClassifierModel:
                     print(f"Grad-CAM generation failed: {e}")
                     # Still return probability without heatmap
             
+            
+            # ── Generate Error Level Analysis (ELA) Map ──
+            ela_b64 = self._compute_ela(image_bytes)
+            
             return {
                 "model_status": "ready",
                 "probability": float(prob),
                 "heatmap": f"data:image/png;base64,{heatmap_b64}" if heatmap_b64 else None,
                 "heatmap_text": heatmap_text,
+                "ela_map": f"data:image/png;base64,{ela_b64}" if ela_b64 else None,
                 "ood_status": ood_status,
                 "ood_distance": float(ood_distance) if ood_distance is not None else None,
             }
@@ -247,6 +253,7 @@ class ClassifierModel:
                 "probability": None,
                 "heatmap": None,
                 "heatmap_text": None,
+                "ela_map": None,
                 "ood_status": None,
                 "ood_distance": None,
             }
@@ -296,6 +303,39 @@ class ClassifierModel:
                 
         status = "in_distribution" if min_dist <= self.ood_threshold else "out_of_distribution"
         return min_dist, status
+        
+    def _compute_ela(self, image_bytes: bytes) -> str:
+        """Compute Error Level Analysis map for forensic tampering detection."""
+        try:
+            original = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+            
+            # Save at known compression rate
+            temp_buffer = io.BytesIO()
+            original.save(temp_buffer, 'JPEG', quality=90)
+            temp_buffer.seek(0)
+            
+            # Reload and difference
+            compressed = Image.open(temp_buffer)
+            diff = ImageChops.difference(original, compressed)
+            
+            # Enhance to be visible
+            extrema = diff.getextrema()
+            max_diff = max([ex[1] for ex in extrema])
+            if max_diff == 0:
+                max_diff = 1
+            
+            scale = 255.0 / max_diff
+            ela_img = ImageEnhance.Brightness(diff).enhance(scale)
+            
+            # We want to return a nicely sized thumbnail for the UI, max 800px wide
+            ela_img.thumbnail((800, 800))
+            
+            out_buffer = io.BytesIO()
+            ela_img.save(out_buffer, format='PNG')
+            return base64.b64encode(out_buffer.getvalue()).decode('utf-8')
+        except Exception as e:
+            print(f"ELA computation failed: {e}")
+            return None
     
     def _overlay_heatmap(self, np_img: np.ndarray, cam: np.ndarray) -> str:
         """Create a JET-colored heatmap overlay and return base64 PNG."""

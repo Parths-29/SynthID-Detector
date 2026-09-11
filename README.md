@@ -11,7 +11,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
-An advanced, production-ready full-stack application designed to verify image authenticity using a **3-Signal Verification Architecture**: a fine-tuned **ResNet50 Deep Learning Classifier** with real **Grad-CAM visual explainability**, a **SynthID Frequency Spectrum (FFT)** + EXIF metadata forensic engine, and a **Gemini Multimodal AI Reasoning Assistant**.
+An advanced, production-ready full-stack application designed around a **Dual-Threat Forensic Architecture**. Most detectors conflate two different questions, but this tool independently analyzes (1) **Whole-Image Synthesis** (via a fine-tuned ResNet50 Classifier, Grad-CAM, SynthID FFT, and Gemini) and (2) **Local Tampering & Splicing** (via Forensic Error Level Analysis).
 
 </div>
 
@@ -22,7 +22,7 @@ An advanced, production-ready full-stack application designed to verify image au
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                      Frontend (Next.js 14)                       │
-│   3-Panel Result Dashboard · Interactive Grad-CAM Heatmap        │
+│   3-Panel Result Dashboard · Interactive Forensic Modal          │
 │   FFT Spectrum Canvas · Gemini Assistant Chat · History Page     │
 │          localhost:3000   (Tailwind CSS + Framer Motion)         │
 └────────────────────────────────┬─────────────────────────────────┘
@@ -38,6 +38,7 @@ An advanced, production-ready full-stack application designed to verify image au
 │  PyTorch ResNet │     │   FFT Spectral  │      │  Google Gemini  │
 │  Classifier +   │     │  V4 Codebook    │      │  1.5 Flash API  │
 │  Grad-CAM Hooks │     │  EXIF Forensics │      │ Isolated Quotas │
+│  + ELA Analysis │     │                 │      │                 │
 └─────────────────┘     └─────────────────┘      └─────────────────┘
 ```
 
@@ -47,6 +48,7 @@ An advanced, production-ready full-stack application designed to verify image au
 
 - **Trained Model Verdict (`/classify`)**: Fine-tuned **ResNet50 classifier** trained to detect AI-generated synthetic images versus authentic photographs.
 - **Real Grad-CAM Explainability**: Uses PyTorch activation hooks on `layer4` to generate spatial activation heatmaps, visually highlighting exact regions triggering the AI verdict.
+- **Tampering & Splice Indicators (ELA)**: Built-in Error Level Analysis to detect local compositing or photo manipulation by analyzing JPEG compression histories. A completely distinct forensic capability from whole-image AI detection.
 - **SynthID Frequency Analysis (`/detect`)**: Extracts invisible Google SynthID watermark patterns using Fast Fourier Transform (FFT) radial spectrum analysis.
 - **Metadata Forensics**: Scans EXIF headers and raw byte signatures for AI generator footprints (Midjourney, DALL-E, Google Imagen, DeepMind).
 - **Gemini AI Visual Deep Scan (`/deep-scan`)**: Multimodal visual forensic scan identifying structural artifacts, unnatural lighting, or anatomical flaws.

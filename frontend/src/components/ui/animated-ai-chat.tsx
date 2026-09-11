@@ -19,6 +19,8 @@ import {
   Clock,
   Upload,
   Cpu,
+  Maximize2,
+  X
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import * as React from "react";
@@ -230,6 +232,13 @@ export function AnimatedAIChat() {
   const [classifyResults, setClassifyResults] = useState<Record<string, any>>({});
   const [isDeepScanning, setIsDeepScanning] = useState<Record<string, boolean>>({});
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedModalImage, setSelectedModalImage] = useState<{
+    original: string;
+    heatmap: string | null;
+    ela: string | null;
+    filename: string;
+    initialView: 'heatmap' | 'ela' | 'original';
+  } | null>(null);
   const { textareaRef, adjustHeight } = useAutoResizeTextarea({
     minHeight: 60,
     maxHeight: 200,
@@ -883,18 +892,56 @@ export function AnimatedAIChat() {
                                   </div>
                                 </div>
                               </div>
-                              {classifyResults[result.filename].heatmap && (
-                                <div className="w-24 h-24 shrink-0 rounded-lg overflow-hidden border border-white/10 relative">
-                                  <img 
-                                    src={classifyResults[result.filename].heatmap} 
-                                    alt="Grad-CAM Heatmap" 
-                                    className="w-full h-full object-cover"
-                                  />
-                                  <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-white/80 text-center py-0.5">
-                                    Grad-CAM
+                              <div className="flex flex-col gap-2 shrink-0">
+                                {classifyResults[result.filename].heatmap && (
+                                  <div 
+                                    className="w-24 h-24 rounded-lg overflow-hidden border border-white/10 relative cursor-pointer hover:border-violet-500/50 transition-colors group"
+                                    onClick={() => setSelectedModalImage({
+                                      original: previews[idx],
+                                      heatmap: classifyResults[result.filename].heatmap,
+                                      ela: classifyResults[result.filename].ela_map,
+                                      filename: result.filename,
+                                      initialView: 'heatmap'
+                                    })}
+                                  >
+                                    <img 
+                                      src={classifyResults[result.filename].heatmap} 
+                                      alt="Grad-CAM Heatmap" 
+                                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                    />
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-white/80 text-center py-0.5">
+                                      Grad-CAM
+                                    </div>
+                                    <div className="absolute inset-0 bg-violet-500/0 group-hover:bg-violet-500/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                      <Maximize2 className="w-4 h-4 text-white" />
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
+                                {classifyResults[result.filename].ela_map && (
+                                  <div 
+                                    className="w-24 h-24 rounded-lg overflow-hidden border border-white/10 relative cursor-pointer hover:border-blue-500/50 transition-colors group"
+                                    onClick={() => setSelectedModalImage({
+                                      original: previews[idx],
+                                      heatmap: classifyResults[result.filename].heatmap,
+                                      ela: classifyResults[result.filename].ela_map,
+                                      filename: result.filename,
+                                      initialView: 'ela'
+                                    })}
+                                  >
+                                    <img 
+                                      src={classifyResults[result.filename].ela_map} 
+                                      alt="ELA Map" 
+                                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                    />
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-white/80 text-center py-0.5 leading-tight">
+                                      Tampering / Splice
+                                    </div>
+                                    <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                      <Maximize2 className="w-4 h-4 text-white" />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
@@ -1118,6 +1165,12 @@ export function AnimatedAIChat() {
           }}
         />
       )}
+      
+      <HeatmapModal 
+        data={selectedModalImage} 
+        isOpen={!!selectedModalImage} 
+        onClose={() => setSelectedModalImage(null)} 
+      />
     </div>
   );
 }
@@ -1250,5 +1303,99 @@ function DetectionAssistant({
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+function HeatmapModal({ 
+  isOpen, 
+  onClose, 
+  data 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  data: { original: string; heatmap: string | null; ela: string | null; filename: string; initialView: 'heatmap' | 'ela' | 'original' } | null;
+}) {
+  const [view, setView] = useState<'original' | 'heatmap' | 'ela'>('heatmap');
+  
+  useEffect(() => {
+    if (isOpen && data) {
+      setView(data.initialView);
+    }
+  }, [isOpen, data]);
+
+  return (
+    <AnimatePresence>
+      {isOpen && data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-xl"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-4xl bg-black/80 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10"
+          >
+            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-white/90">Forensic Pixel Analysis</h3>
+                <p className="text-sm text-white/50">{data.filename}</p>
+              </div>
+              <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                <X className="w-5 h-5 text-white/70" />
+              </button>
+            </div>
+            
+            <div className="p-6 flex flex-col items-center">
+              {/* Toggles */}
+              <div className="flex bg-white/5 p-1 rounded-lg mb-6">
+                <button
+                  onClick={() => setView('original')}
+                  className={cn("px-4 py-2 text-sm font-medium rounded-md transition-colors", view === 'original' ? "bg-white/10 text-white shadow-sm" : "text-white/50 hover:text-white/70")}
+                >
+                  Original Image
+                </button>
+                {data.heatmap && (
+                  <button
+                    onClick={() => setView('heatmap')}
+                    className={cn("px-4 py-2 text-sm font-medium rounded-md transition-colors", view === 'heatmap' ? "bg-violet-500/20 text-violet-300 shadow-sm" : "text-white/50 hover:text-white/70")}
+                  >
+                    Grad-CAM (Network Focus)
+                  </button>
+                )}
+                {data.ela && (
+                  <button
+                    onClick={() => setView('ela')}
+                    className={cn("px-4 py-2 text-sm font-medium rounded-md transition-colors", view === 'ela' ? "bg-blue-500/20 text-blue-300 shadow-sm" : "text-white/50 hover:text-white/70")}
+                  >
+                    Tampering & Splice Indicators
+                  </button>
+                )}
+              </div>
+              
+              {/* Image Container */}
+              <div className="relative w-full max-h-[60vh] flex justify-center items-center rounded-lg overflow-hidden border border-white/10 bg-black/50 p-2">
+                <img 
+                  src={view === 'original' ? data.original : view === 'heatmap' ? (data.heatmap || data.original) : (data.ela || data.original)} 
+                  alt={view}
+                  className="max-w-full max-h-[55vh] object-contain rounded-md"
+                />
+              </div>
+              
+              {/* Context Footer */}
+              <div className="mt-6 text-center max-w-2xl text-sm text-white/60">
+                {view === 'heatmap' && "Grad-CAM reveals which regions of the image most strongly activated the AI-generation classifier."}
+                {view === 'ela' && "Error Level Analysis (ELA) detects local tampering and splices by comparing JPEG compression histories. It is most informative on JPEG images with a possible editing history. Freshly generated PNG images (the common case for whole-image AI generation) typically show limited signal here."}
+                {view === 'original' && "Original uploaded image."}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
