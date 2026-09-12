@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowRight, ChevronRight, Menu, X, Shield, Zap, BarChart3, Sparkles, Terminal, Code2, Database, Cpu, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AnimatedGroup } from "@/components/ui/animated-group";
+import { MagneticText } from "@/components/ui/morphing-cursor";
+import { HeroHighlight } from "@/components/ui/hero-highlight";
 import { cn } from "@/lib/utils";
 
 const transitionVariants = {
@@ -32,58 +34,11 @@ export function HeroSection() {
   return (
     <>
       <HeroHeader />
-      <main className="overflow-hidden">
-        <div
-          aria-hidden
-          className="z-[2] absolute inset-0 pointer-events-none isolate opacity-50 contain-strict hidden lg:block"
-        >
-          <div className="w-[35rem] h-[80rem] -translate-y-[350px] absolute left-0 top-0 -rotate-45 rounded-full bg-[radial-gradient(68.54%_68.72%_at_55.02%_31.46%,hsla(0,0%,85%,.08)_0,hsla(0,0%,55%,.02)_50%,hsla(0,0%,45%,0)_80%)]" />
-          <div className="h-[80rem] absolute left-0 top-0 w-56 -rotate-45 rounded-full bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.06)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)] [translate:5%_-50%]" />
-          <div className="h-[80rem] -translate-y-[350px] absolute left-0 top-0 w-56 -rotate-45 bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.04)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)]" />
-        </div>
-        <section>
-          <div className="relative pt-24 md:pt-36">
-            <AnimatedGroup
-              variants={{
-                container: {
-                  visible: {
-                    transition: {
-                      delayChildren: 1,
-                    },
-                  },
-                },
-                item: {
-                  hidden: {
-                    opacity: 0,
-                    y: 20,
-                  },
-                  visible: {
-                    opacity: 1,
-                    y: 0,
-                    transition: {
-                      type: "spring" as const,
-                      bounce: 0.3,
-                      duration: 2,
-                    },
-                  },
-                },
-              }}
-              className="absolute inset-0 -z-20"
-            >
-              <img
-                src="https://ik.imagekit.io/lrigu76hy/tailark/night-background.jpg?updatedAt=1745733451120"
-                alt="background"
-                className="absolute inset-x-0 top-56 -z-20 hidden lg:top-32 dark:block"
-                width="3276"
-                height="4095"
-              />
-            </AnimatedGroup>
-            <div
-              aria-hidden
-              className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,var(--background)_75%)]"
-            />
+      <main className="overflow-hidden bg-background relative">
+        <HeroHighlight containerClassName="h-auto min-h-screen items-start flex-col w-full">
+          <div className="relative z-10 w-full pt-24 md:pt-36">
             <div className="mx-auto max-w-7xl px-6">
-              <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
+              <div className="text-center mx-auto lg:mt-0">
                 <AnimatedGroup variants={transitionVariants}>
                   <Link
                     href="/chat"
@@ -106,10 +61,13 @@ export function HeroSection() {
                     </div>
                   </Link>
 
-                  <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] flex items-center justify-center">
-                    <Cpu className="w-12 h-12 md:w-16 md:h-16 text-violet-500 mr-4 shrink-0" />
-                    <span>Detect AI Watermarks in Seconds</span>
-                  </h1>
+                  <div className="mt-8 lg:mt-16 flex flex-col items-center justify-center">
+                    <MagneticText text="DETECT AI" hoverText="SYNTHID" className="mb-2" />
+                    <h2 className="text-balance text-3xl md:text-4xl lg:text-5xl font-medium flex items-center justify-center text-foreground/80">
+                      <Cpu className="w-8 h-8 md:w-10 md:h-10 text-violet-500 mr-3 shrink-0" />
+                      Watermarks in Seconds
+                    </h2>
+                  </div>
                   <p className="mx-auto mt-8 max-w-2xl text-balance text-lg">
                     Verify image authenticity by scanning for Google&apos;s SynthID
                     invisible watermark, EXIF metadata, and semantic AI Visual Analysis
@@ -263,8 +221,7 @@ export function HeroSection() {
               </div>
             </AnimatedGroup>
           </div>
-        </section>
-        <section className="bg-background pb-16 pt-16 md:pb-32">
+          <section className="relative z-10 w-full pb-16 pt-16 md:pb-32">
           <div className="group relative m-auto max-w-5xl px-6">
             <div className="absolute inset-0 z-10 flex scale-95 items-center justify-center opacity-0 duration-500 group-hover:scale-100 group-hover:opacity-100">
               <Link
@@ -366,7 +323,7 @@ export function HeroSection() {
         </section>
 
         {/* How It Works Section */}
-        <section className="py-24 relative overflow-hidden bg-black">
+        <section id="how-it-works" className="relative z-10 w-full py-24 overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-500/[0.03] to-transparent pointer-events-none" />
           <div className="mx-auto max-w-7xl px-6 relative z-10">
             <div className="text-center mb-16">
@@ -406,7 +363,7 @@ export function HeroSection() {
         </section>
 
         {/* API Docs Section */}
-        <section className="py-24 relative overflow-hidden bg-black border-t border-white/[0.05]">
+        <section className="relative z-10 w-full py-24 overflow-hidden border-t border-white/[0.05]">
           <div className="mx-auto max-w-7xl px-6 relative z-10 flex flex-col md:flex-row items-center gap-12">
             <div className="flex-1 space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium">
@@ -421,7 +378,7 @@ export function HeroSection() {
                 <Link href="/chat" className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors">
                   Try the Demo
                 </Link>
-                <Link href="http://localhost:8000/docs" target="_blank" className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-white/5 text-white border border-white/10 hover:bg-white/10 transition-colors">
+                <Link href="http://localhost:8001/docs" target="_blank" className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-white/5 text-white border border-white/10 hover:bg-white/10 transition-colors">
                   View Swagger Docs
                 </Link>
               </div>
@@ -469,14 +426,15 @@ export function HeroSection() {
                 <Link href="/chat" className="hover:text-white/70 transition-colors">Try Demo</Link>
                 <Link href="/history" className="hover:text-white/70 transition-colors">History</Link>
                 <Link href="https://github.com/Parths-29/SynthID-Detector" target="_blank" className="hover:text-white/70 transition-colors">GitHub</Link>
-                <Link href="http://localhost:8000/docs" target="_blank" className="hover:text-white/70 transition-colors">API Docs</Link>
+                <Link href="http://localhost:8001/docs" target="_blank" className="hover:text-white/70 transition-colors">API Docs</Link>
               </div>
               <div className="text-xs text-white/20">
                 &copy; {new Date().getFullYear()} Parth Sharma. MIT License.
               </div>
             </div>
-          </div>
-        </footer>
+            </div>
+          </footer>
+        </HeroHighlight>
       </main>
     </>
   );
@@ -485,7 +443,7 @@ export function HeroSection() {
 const menuItems = [
   { name: "How It Works", href: "#how-it-works" },
   { name: "History", href: "/history" },
-  { name: "API Docs", href: "/chat" },
+  { name: "API Docs", href: "http://localhost:8001/docs" },
   { name: "GitHub", href: "https://github.com/Parths-29/SynthID-Detector" },
 ];
 

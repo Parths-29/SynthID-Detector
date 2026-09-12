@@ -380,6 +380,13 @@ export function AnimatedAIChat() {
   const handleSendMessage = async () => {
     if (attachments.length === 0) return;
 
+    const usageStr = localStorage.getItem("synthid_usage_count");
+    const usage = usageStr ? parseInt(usageStr, 10) : 0;
+    if (usage >= 3) {
+      window.location.href = "/payment";
+      return;
+    }
+
     setIsTyping(true);
     setResults([]);
 
@@ -403,6 +410,8 @@ export function AnimatedAIChat() {
         } catch (e) {
           console.error("Classification failed:", e);
         }
+        
+        localStorage.setItem("synthid_usage_count", (usage + 1).toString());
       } catch (err: unknown) {
         const error = err as {
           response?: { data?: { detail?: string } };
@@ -427,6 +436,7 @@ export function AnimatedAIChat() {
           formData
         );
         const jobId = res.data.job_id;
+        localStorage.setItem("synthid_usage_count", (usage + 1).toString());
         pollBatchStatus(jobId);
         return; // don't setIsTyping(false) yet
       } catch (err: unknown) {
@@ -590,13 +600,27 @@ export function AnimatedAIChat() {
 
         <div className="flex items-center gap-3 bg-black/60 dark:bg-black/80 backdrop-blur-xl p-1.5 rounded-xl border border-white/10 shadow-2xl pointer-events-auto">
           <ThemeToggle showLabel={true} />
-          <Link
-            href="/login"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-500 hover:to-indigo-500 transition-all shadow-md shadow-violet-600/30"
-          >
-            <User className="w-3.5 h-3.5" />
-            <span>Login</span>
-          </Link>
+          {typeof window !== 'undefined' && localStorage.getItem("synthid_token") ? (
+            <button
+              onClick={() => {
+                localStorage.removeItem("synthid_token");
+                localStorage.removeItem("synthid_user");
+                window.location.href = "/login";
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white transition-all shadow-md"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-500 hover:to-indigo-500 transition-all shadow-md shadow-violet-600/30"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Login</span>
+            </Link>
+          )}
         </div>
       </div>
 

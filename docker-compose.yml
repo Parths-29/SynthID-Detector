@@ -14,8 +14,8 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://frontend:3000
       - BATCH_JOB_TTL=3600
       # MongoDB — uncomment when ready
-      # - MONGO_URI=mongodb://mongo:27017
-      # - MONGO_DB=synthid_detector
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DB=synthid_detector
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -37,14 +37,13 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # MongoDB — uncomment when ready
-  # mongo:
-  #   image: mongo:7
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - mongo_data:/data/db
-  #   restart: unless-stopped
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
 
-# volumes:
-#   mongo_data:
+volumes:
+  mongo_data:

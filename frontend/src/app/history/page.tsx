@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -36,7 +37,16 @@ export default function HistoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
 
+  const router = useRouter();
+
   useEffect(() => {
+    // Check Auth
+    const token = localStorage.getItem("synthid_token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
     const stored = localStorage.getItem("synthid_scan_history");
     if (stored) {
       try {
@@ -45,7 +55,7 @@ export default function HistoryPage() {
         setItems([]);
       }
     }
-  }, []);
+  }, [router]);
 
   const filteredItems = items
     .filter((item) => {

@@ -80,7 +80,7 @@ export default function SignUpPage() {
         transition={{ duration: 0.6 }}
         className="w-full max-w-md px-4 z-10 my-8"
       >
-        <div className="bg-white/90 dark:bg-zinc-950/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/40 text-zinc-900 dark:text-zinc-100 relative overflow-hidden">
+        <div className="bg-white/95 dark:bg-zinc-950/90 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800/80 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/50 text-zinc-900 dark:text-zinc-100 relative overflow-hidden">
           
           {/* Header Badge */}
           <div className="flex flex-col items-center text-center mb-8">
