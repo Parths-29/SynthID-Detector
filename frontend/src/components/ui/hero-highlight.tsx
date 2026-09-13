@@ -41,15 +41,15 @@ export const HeroHighlight = ({
       onMouseMove={handleMouseMove}
     >
       <div 
-        className="absolute inset-0 pointer-events-none opacity-70" 
+        className="absolute inset-0 pointer-events-none opacity-30 dark:opacity-0" 
         style={dotPattern('rgb(212 212 212)')} // neutral-300 for light mode
       />
       <div 
-        className="absolute inset-0 dark:opacity-70 opacity-0 pointer-events-none" 
+        className="absolute inset-0 dark:opacity-30 opacity-0 pointer-events-none" 
         style={dotPattern('rgb(38 38 38)')} // neutral-800 for dark mode
       />
       <motion.div
-        className="pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-60"
         style={{
           ...dotPattern('rgb(139 92 246)'), // violet-500
           WebkitMaskImage: useMotionTemplate`

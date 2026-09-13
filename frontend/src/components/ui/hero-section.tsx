@@ -35,7 +35,7 @@ export function HeroSection() {
     <>
       <HeroHeader />
       <main className="overflow-hidden bg-background relative">
-        <HeroHighlight containerClassName="h-auto min-h-screen items-start flex-col w-full">
+        <HeroHighlight containerClassName="h-auto min-h-screen items-center flex-col w-full">
           <div className="relative z-10 w-full pt-24 md:pt-36">
             <div className="mx-auto max-w-7xl px-6">
               <div className="text-center mx-auto lg:mt-0">
@@ -135,7 +135,7 @@ export function HeroSection() {
                 ...transitionVariants,
               }}
             >
-              <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
+              <div className="relative mt-8 overflow-hidden px-2 sm:mt-12 md:mt-20">
                 <div
                   aria-hidden
                   className="bg-gradient-to-b to-background absolute inset-0 z-10 from-transparent from-35%"
@@ -415,7 +415,7 @@ export function HeroSection() {
         </section>
 
         {/* Footer */}
-        <footer className="border-t border-white/[0.05] bg-black py-12">
+        <footer className="relative z-10 w-full border-t border-white/[0.05] py-12">
           <div className="mx-auto max-w-7xl px-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-2">
@@ -432,8 +432,8 @@ export function HeroSection() {
                 &copy; {new Date().getFullYear()} Parth Sharma. MIT License.
               </div>
             </div>
-            </div>
-          </footer>
+          </div>
+        </footer>
         </HeroHighlight>
       </main>
     </>
@@ -471,78 +471,128 @@ const HeroHeader = () => {
     <header>
       <nav
         data-state={menuState && "active"}
-        className="fixed z-20 w-full px-2 group"
+        className="fixed z-50 top-0 left-0 right-0 w-full px-2 group pointer-events-auto"
       >
         <div
           className={cn(
             "mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12",
             isScrolled &&
-              "bg-background/50 max-w-4xl rounded-2xl border backdrop-blur-lg lg:px-5"
+              "bg-background/80 max-w-4xl rounded-2xl border backdrop-blur-lg lg:px-5 shadow-lg"
           )}
         >
-          <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
-            <div className="flex w-full justify-between lg:w-auto">
+          <div className="relative flex items-center justify-between py-3 lg:py-4">
+            <div className="flex items-center space-x-2">
               <Link
                 href="/"
                 aria-label="home"
-                className="flex items-center space-x-2"
+                className="flex items-center space-x-2 cursor-pointer"
               >
                 <Logo />
               </Link>
-
-              <button
-                onClick={() => setMenuState(!menuState)}
-                aria-label={
-                  menuState == true ? "Close Menu" : "Open Menu"
-                }
-                className="relative z-20 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden"
-              >
-                <Menu className="in-data-[state=active]:rotate-180 group-data-[state=active]:scale-0 group-data-[state=active]:opacity-0 m-auto size-6 duration-200" />
-                <X className="group-data-[state=active]:rotate-0 group-data-[state=active]:scale-100 group-data-[state=active]:opacity-100 absolute inset-0 m-auto size-6 -rotate-180 scale-0 opacity-0 duration-200" />
-              </button>
             </div>
 
-            <div className="absolute inset-0 m-auto hidden size-fit lg:block">
-              <ul className="flex gap-8 text-sm">
+            {/* Desktop Navigation Links */}
+            <div className="hidden lg:flex items-center justify-center">
+              <ul className="flex gap-8 text-sm font-medium">
                 {menuItems.map((item, index) => (
                   <li key={index}>
-                    <Link
-                      href={item.href}
-                      className="text-muted-foreground hover:text-accent-foreground block duration-150"
-                    >
-                      <span>{item.name}</span>
-                    </Link>
+                    {item.href.startsWith("#") ? (
+                      <a
+                        href={item.href}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const el = document.getElementById(item.href.replace("#", ""));
+                          if (el) {
+                            el.scrollIntoView({ behavior: "smooth" });
+                          }
+                        }}
+                        className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        {item.name}
+                      </a>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        target={item.href.startsWith("http") ? "_blank" : undefined}
+                        className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        {item.name}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="bg-background group-data-[state=active]:block lg:group-data-[state=active]:flex mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:border-transparent">
-              <div className="flex w-full flex-col space-y-2 lg:hidden">
+            {/* Desktop Action Buttons */}
+            <div className="hidden lg:flex items-center gap-3">
+              <Button asChild variant="outline" size="sm">
+                <Link href="/chat">
+                  <span>Open App</span>
+                </Link>
+              </Button>
+              <Button asChild size="sm">
+                <Link href="/chat">
+                  <span>Get Started</span>
+                </Link>
+              </Button>
+            </div>
+
+            {/* Mobile Hamburger Button */}
+            <button
+              onClick={() => setMenuState(!menuState)}
+              aria-label={menuState ? "Close Menu" : "Open Menu"}
+              className="relative z-50 -m-2.5 -mr-4 block cursor-pointer p-2.5 lg:hidden"
+            >
+              <Menu className="group-data-[state=active]:rotate-180 group-data-[state=active]:scale-0 group-data-[state=active]:opacity-0 m-auto size-6 duration-200" />
+              <X className="group-data-[state=active]:rotate-0 group-data-[state=active]:scale-100 group-data-[state=active]:opacity-100 absolute inset-0 m-auto size-6 -rotate-180 scale-0 opacity-0 duration-200" />
+            </button>
+          </div>
+
+          {/* Mobile Menu Dropdown */}
+          {menuState && (
+            <div className="bg-background/95 backdrop-blur-xl border rounded-2xl p-6 mb-4 mt-2 flex flex-col space-y-4 lg:hidden shadow-2xl">
+              <div className="flex flex-col space-y-3">
                 {menuItems.map((item, index) => (
-                  <Link
-                    key={index}
-                    href={item.href}
-                    className="text-muted-foreground hover:text-accent-foreground block duration-150"
-                  >
-                    <span>{item.name}</span>
-                  </Link>
+                  item.href.startsWith("#") ? (
+                    <a
+                      key={index}
+                      href={item.href}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setMenuState(false);
+                        const el = document.getElementById(item.href.replace("#", ""));
+                        if (el) {
+                          el.scrollIntoView({ behavior: "smooth" });
+                        }
+                      }}
+                      className="text-muted-foreground hover:text-foreground text-base py-1 font-medium cursor-pointer"
+                    >
+                      {item.name}
+                    </a>
+                  ) : (
+                    <Link
+                      key={index}
+                      href={item.href}
+                      target={item.href.startsWith("http") ? "_blank" : undefined}
+                      onClick={() => setMenuState(false)}
+                      className="text-muted-foreground hover:text-foreground text-base py-1 font-medium cursor-pointer"
+                    >
+                      {item.name}
+                    </Link>
+                  )
                 ))}
               </div>
-              <div className="flex w-full gap-3 sm:w-fit">
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/chat">
-                    <span>Open App</span>
-                  </Link>
+              <div className="flex flex-col gap-2 pt-2 border-t">
+                <Button asChild variant="outline" size="sm" className="w-full">
+                  <Link href="/chat">Open App</Link>
                 </Button>
-                <Button asChild size="sm">
-                  <Link href="/chat">
-                    <span>Get Started</span>
-                  </Link>
+                <Button asChild size="sm" className="w-full">
+                  <Link href="/chat">Get Started</Link>
                 </Button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </nav>
     </header>
